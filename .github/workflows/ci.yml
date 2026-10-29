@@ -1,0 +1,36 @@
+name: E-com Global CI
+on: [push, pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: ecom_test
+          POSTGRES_USER: ecom
+          POSTGRES_PASSWORD: ci-test-only
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U ecom -d ecom_test" --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-bookworm
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ecom:ci-test-only@localhost:5432/ecom_test
+      TEST_DATABASE_URL: postgresql://ecom:ci-test-only@localhost:5432/ecom_test
+      TEST_VECTOR_URL: postgresql://ecom:ci-test-only@localhost:5432/ecom_test
+      TEST_REDIS_URL: redis://localhost:6379/15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run prisma:migrate
+      - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/search-index.sql
+      - run: npm run format:check
+      - run: npm run check
+      - run: docker build -t e-com-global:ci .
