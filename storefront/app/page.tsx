@@ -1,3 +1,4 @@
+import { RecentlyViewed } from '@/components/recently-viewed';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -260,6 +261,7 @@ export default async function Home() {
           </div>
         </section>
       )}
+      <RecentlyViewed />
       {enabled('closing') && (
         <section className="shell closing">
           <span className="eyebrow muted">

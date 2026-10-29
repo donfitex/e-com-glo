@@ -15,6 +15,7 @@ export interface Database extends Pick<
   | 'storeContent'
   | 'inboxKey'
   | 'supportMessage'
+  | 'wishlistItem'
   | '$queryRaw'
 > {
   $transaction<T>(

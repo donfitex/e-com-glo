@@ -1,3 +1,5 @@
+import { WishlistService } from './modules/wishlist/service';
+import { wishlistRouter } from './modules/wishlist/http';
 import { inboxRouter } from './modules/inbox/http';
 import { InboxService } from './modules/inbox/service';
 import { contentRouter } from './modules/content/http';
@@ -262,6 +264,10 @@ export function createApp(config: Config, deps: Dependencies) {
       guard,
       rateLimit(deps.limiter, 'contact', 20, 600),
     ),
+  );
+  app.use(
+    '/api/v1/wishlist',
+    wishlistRouter(new WishlistService(deps.db), guard),
   );
   app.use('/api/v1', contentRouter(deps.db, guard));
   app.use('/api/v1', catalogRouter(catalog, guard));

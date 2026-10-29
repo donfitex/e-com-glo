@@ -691,6 +691,59 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
         .data,
     ).toHaveLength(2);
   }, 20000);
+  test('saved products are idempotent, private to the account and safe after deactivation', async () => {
+    await request(app).get('/api/v1/wishlist').expect(401);
+    await request(app)
+      .post(`/api/v1/wishlist/${productId}`)
+      .set(auth(customer))
+      .send({})
+      .expect(200);
+    await request(app)
+      .post(`/api/v1/wishlist/${productId}`)
+      .set(auth(customer))
+      .send({})
+      .expect(200);
+    expect(await db.wishlistItem.count({ where: { userId: customerId } })).toBe(
+      1,
+    );
+    expect(
+      (await request(app).get('/api/v1/wishlist').set(auth(other))).body.data
+        .total,
+    ).toBe(0);
+    expect(
+      (await request(app).get('/api/v1/wishlist/ids').set(auth(customer))).body
+        .data,
+    ).toEqual([productId]);
+    await request(app)
+      .delete(`/api/v1/wishlist/${productId}`)
+      .set(auth(other))
+      .expect(204);
+    expect(
+      (await request(app).get('/api/v1/wishlist').set(auth(customer))).body.data
+        .total,
+    ).toBe(1);
+    await db.product.update({
+      where: { id: productId },
+      data: { active: false },
+    });
+    expect(
+      (await request(app).get('/api/v1/wishlist').set(auth(customer))).body.data
+        .items[0].product,
+    ).toBeNull();
+    await request(app)
+      .post(`/api/v1/wishlist/${productId}`)
+      .set(auth(other))
+      .send({})
+      .expect(404);
+    await request(app)
+      .delete(`/api/v1/wishlist/${productId}`)
+      .set(auth(customer))
+      .expect(204);
+    expect(
+      (await request(app).get('/api/v1/wishlist').set(auth(customer))).body.data
+        .total,
+    ).toBe(0);
+  });
   test('liveness, dependency readiness, headers and safe errors', async () => {
     expect((await request(app).get('/health')).body.service).toBe(
       'E-com Global',

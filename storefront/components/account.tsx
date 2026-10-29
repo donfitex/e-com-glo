@@ -1,10 +1,18 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Package, ShoppingBag, ArrowUpRight, Settings2 } from 'lucide-react';
+import {
+  Package,
+  ShoppingBag,
+  ArrowUpRight,
+  Settings2,
+  Heart,
+} from 'lucide-react';
+import { useWishlist } from './wishlist-provider';
 import { useSession } from './session';
 export function Account() {
   const { user, loading, logout } = useSession();
+  const { ids } = useWishlist();
   const router = useRouter();
   if (loading) return <div className="shell page">Loading your account…</div>;
   if (!user)
@@ -35,6 +43,12 @@ export function Account() {
           <ShoppingBag />
           <h2>Your shopping bag</h2>
           <p>Pick up your next everyday favorites.</p>
+          <ArrowUpRight />
+        </Link>
+        <Link className="account-card" href="/wishlist">
+          <Heart />
+          <h2>Saved products</h2>
+          <p>{ids.length} good finds, ready for another look.</p>
           <ArrowUpRight />
         </Link>
         {user.role === 'ADMIN' && (

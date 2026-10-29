@@ -6,7 +6,7 @@ const href = z
   .max(300)
   .refine(
     (value) =>
-      /^\/(?:shop|products|contact|help|policies|account)(?:[/?#]|$)/.test(
+      /^\/(?:shop|products|contact|help|policies|account|wishlist)(?:[/?#]|$)/.test(
         value,
       ) &&
       !value.includes('\\') &&

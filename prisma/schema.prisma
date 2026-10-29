@@ -31,6 +31,7 @@ model User {
  createdAt DateTime @default(now())
  cart Cart?
  orders Order[]
+ wishlist WishlistItem[]
 }
 model Category {
  id String @id @default(uuid()) @db.Uuid
@@ -53,6 +54,7 @@ model Product {
  createdAt DateTime @default(now())
  updatedAt DateTime @updatedAt
  cartItems CartItem[]
+ wishlist WishlistItem[]
  @@index([categoryId,active,createdAt,id])
  @@index([currency,active,price,id])
 }
@@ -206,4 +208,14 @@ model SupportMessage {
  resolvedAt DateTime?
  @@index([status,createdAt,id])
  @@index([keyId])
+}
+
+model WishlistItem {
+ userId String @db.Uuid
+ productId String @db.Uuid
+ user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+ createdAt DateTime @default(now())
+ @@id([userId,productId])
+ @@index([userId,createdAt,productId])
 }

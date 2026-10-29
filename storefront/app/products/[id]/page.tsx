@@ -1,3 +1,6 @@
+import { RecordProductView } from '@/components/recently-viewed';
+import { ShareProduct } from '@/components/share-product';
+import { FavoriteButton } from '@/components/favorite-button';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ShieldCheck, PackageCheck } from 'lucide-react';
@@ -21,6 +24,7 @@ export default async function ProductPage({
   }
   return (
     <div className="shell page">
+      <RecordProductView id={product.id} />
       <div className="breadcrumb">
         <Link href="/">Home</Link> / <Link href="/shop">Collection</Link> /{' '}
         {product.name}
@@ -50,6 +54,14 @@ export default async function ProductPage({
               : 'Currently out of stock'}
           </span>
           <AddToCart productId={product.id} stock={product.stock} />
+          <div className="product-secondary-actions">
+            <FavoriteButton
+              id={product.id}
+              name={product.name}
+              compact={false}
+            />
+            <ShareProduct id={product.id} name={product.name} />
+          </div>
           <div className="detail-benefits">
             <span>
               <ShieldCheck size={19} /> Protected account and checkout

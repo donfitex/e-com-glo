@@ -290,3 +290,9 @@ See [the stage mapping and measured results](docs/backend-master-plan.md) and [r
 ## Encrypted contact and support inbox
 
 Customers can use **Contact us** without an account. Administrators first activate **Admin → Inbox** by creating a separate recovery passphrase, downloading the encrypted recovery file, and publishing the browser-generated public key. Messages are encrypted before transmission and decrypted only in the admin browser. The server stores no readable name, email or message body from the contact form. The inbox includes unread badges, in-app notifications, filtering, read/resolved status and deletion. No plaintext email forwarding is performed. See [encrypted-inbox.md](docs/encrypted-inbox.md) for setup, backup/rotation, cryptographic details and the browser trust boundary. Losing the recovery key/passphrase cannot be fixed by resetting the account password.
+
+### Saved products and shopping tools
+
+Customers can use product hearts to save up to 200 active products across devices, manage them at `/wishlist`, and share a product using the device share sheet or a copyable link. Saved products require a signed-in account and every API operation is scoped to that account. Unavailable saved products remain removable without exposing inactive product details.
+
+Recently viewed products retain only up to eight product IDs in this browser; the homepage shows up to four and includes a clear-history control. Browsing history is optional and shopping continues when device storage is blocked. `/help` includes admin-editable FAQs and links to support and order tracking.

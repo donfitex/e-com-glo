@@ -119,6 +119,9 @@ export function Header() {
           <Link href="/shop?category=sports" onClick={() => setMenu(false)}>
             Sports & outdoors
           </Link>
+          <Link href="/wishlist" onClick={() => setMenu(false)}>
+            Saved products
+          </Link>
           <Link href="/contact" onClick={() => setMenu(false)}>
             Contact us
           </Link>

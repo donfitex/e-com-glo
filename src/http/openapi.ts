@@ -314,6 +314,79 @@ export const openapi = {
         ),
       ),
     }),
+    '/api/v1/site-content': {
+      get: publicOperation(
+        'Published homepage, announcement, footer and FAQ content',
+      ),
+    },
+    '/api/v1/admin/content': {
+      get: secured('Admin: read editable storefront content and revision'),
+      put: secured(
+        'Admin: publish validated content with optimistic revision control',
+      ),
+    },
+    '/api/v1/contact/key': {
+      get: publicOperation(
+        'Active RSA-OAEP public encryption key and fingerprint',
+      ),
+    },
+    '/api/v1/contact/messages': {
+      post: publicOperation(
+        'Submit an opaque AES-GCM encrypted envelope; plaintext is rejected',
+        undefined,
+        '201',
+      ),
+    },
+    '/api/v1/admin/inbox/keys': {
+      get: secured(
+        'Admin: public key history; private keys never reach this API',
+      ),
+      post: secured(
+        'Admin: activate a browser-generated public key with expectedCurrentId',
+        undefined,
+        '201',
+      ),
+    },
+    '/api/v1/admin/inbox/summary': {
+      get: secured('Admin: unread and total message counts'),
+    },
+    '/api/v1/admin/inbox/messages': {
+      get: secured(
+        'Admin: paginated message metadata, optionally filtered by status',
+      ),
+    },
+    '/api/v1/admin/inbox/messages/{id}': item({
+      get: secured('Admin: encrypted envelope for local browser decryption'),
+      patch: secured(
+        'Admin: update message status',
+        object({
+          status: { type: 'string', enum: ['NEW', 'READ', 'RESOLVED'] },
+        }),
+      ),
+      delete: secured(
+        'Admin: permanently delete an encrypted message',
+        undefined,
+        '204',
+      ),
+    }),
+    '/api/v1/wishlist': {
+      get: secured(
+        'Paginated saved products belonging to the authenticated customer',
+      ),
+    },
+    '/api/v1/wishlist/ids': {
+      get: secured('Saved product identifiers for the authenticated customer'),
+    },
+    '/api/v1/wishlist/{id}': item({
+      post: secured(
+        'Idempotently save an active product; at most 200 per customer',
+      ),
+      delete: secured(
+        'Remove an item from the authenticated customer’s saved products',
+        undefined,
+        '204',
+      ),
+    }),
     '/api/v1/admin/events': {
       get: secured('Admin: recent durable dead-letter events'),
     },
