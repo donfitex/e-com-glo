@@ -1,3 +1,6 @@
+import { openapi } from './http/openapi';
+import { deadline } from './shared/deadline';
+import { getHeapStatistics } from 'node:v8';
 import { OrderEventProcessor } from './modules/events/processor';
 import { ProductImages } from './modules/media/service';
 import { mediaRouter } from './modules/media/http';
@@ -42,6 +45,7 @@ export interface Dependencies {
   tokens: Tokens;
   logger: Logger;
   ready: () => Promise<void>;
+  workerHeartbeat?: () => Promise<string | null>;
 }
 export function createApp(config: Config, deps: Dependencies) {
   const app = express();
@@ -96,14 +100,17 @@ export function createApp(config: Config, deps: Dependencies) {
     '/ready',
     endpoint(async (_req, res) => {
       try {
-        await deps.ready();
+        await deadline(deps.ready(), 3000);
         res.json({ status: 'ready' });
       } catch {
         res.status(503).json({ status: 'unavailable' });
       }
     }),
   );
-  app.use('/api/v1', rateLimit(deps.limiter, 'api', 120));
+  app.use(
+    '/api/v1',
+    rateLimit(deps.limiter, 'api', config.API_RATE_LIMIT_PER_MINUTE),
+  );
   const guard = authenticate(deps.tokens);
   const pricing = new PricingService();
   const catalog = new CatalogService(
@@ -171,6 +178,78 @@ export function createApp(config: Config, deps: Dependencies) {
           id.parse(req.params.id),
         ),
       });
+    }),
+  );
+  app.get('/api/v1/openapi.json', (_req, res) => res.json(openapi));
+  app.get(
+    '/api/v1/admin/health',
+    guard,
+    admin,
+    endpoint(async (_req, res) => {
+      const started = performance.now();
+      try {
+        await deadline(deps.ready(), 3000);
+        const heartbeat = deps.workerHeartbeat
+          ? await deadline(deps.workerHeartbeat())
+          : null;
+        const timestamp = heartbeat ? Date.parse(heartbeat) : NaN;
+        const workerHealthy =
+          Number.isFinite(timestamp) &&
+          Date.now() - timestamp < 180000 &&
+          timestamp <= Date.now() + 5000;
+        const groups = await deps.db.outboxEvent.groupBy({
+          by: ['status'],
+          _count: { _all: true },
+        });
+        const queue = { PENDING: 0, PUBLISHED: 0, PROCESSED: 0, DEAD: 0 };
+        for (const group of groups) queue[group.status] = group._count._all;
+        const oldest = await deps.db.outboxEvent.findFirst({
+          where: { status: { in: ['PENDING', 'PUBLISHED'] } },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        });
+        const memory = process.memoryUsage();
+        const healthy = !deps.workerHeartbeat || workerHealthy;
+        res.status(healthy ? 200 : 503).json({
+          data: {
+            status: healthy ? 'ok' : 'degraded',
+            timestamp: new Date().toISOString(),
+            dependencyLatencyMs: Math.round(performance.now() - started),
+            worker: {
+              configured: Boolean(deps.workerHeartbeat),
+              healthy: workerHealthy,
+              lastSeen: Number.isFinite(timestamp)
+                ? new Date(timestamp).toISOString()
+                : null,
+            },
+            queue: {
+              ...queue,
+              oldestPendingSeconds: oldest
+                ? Math.max(
+                    0,
+                    Math.floor(
+                      (Date.now() - oldest.createdAt.getTime()) / 1000,
+                    ),
+                  )
+                : 0,
+            },
+            cache: deps.cache.getStats?.() ?? null,
+            memory: {
+              rssBytes: memory.rss,
+              heapUsedBytes: memory.heapUsed,
+              heapLimitBytes: getHeapStatistics().heap_size_limit,
+            },
+          },
+        });
+      } catch {
+        res.status(503).json({
+          error: {
+            code: 'DEPENDENCY_UNAVAILABLE',
+            message: 'A required dependency is unavailable',
+            requestId: res.locals.requestId,
+          },
+        });
+      }
     }),
   );
   app.use('/api/v1', catalogRouter(catalog, guard));

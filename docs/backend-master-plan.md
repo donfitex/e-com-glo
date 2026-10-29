@@ -66,3 +66,19 @@ The existing private local `sentence-transformers/all-MiniLM-L6-v2` adapter rema
 `npm run search:index` now skips unchanged model/source text, processes bounded pages, isolates product failures, reports indexed/skipped/failed counts, returns a failure exit code if any product failed, and invalidates result caches after successful indexing. Model requests happen outside row locks; a short transaction checks the current product before inserting vectors so concurrent edits cannot silently index a different snapshot. Inactive vectors are removed. Source-text guards exclude stale vectors until reindexing, and text fallback keeps new/edited products discoverable. Run this job after catalog imports/edits or on the chosen release scheduler; it is not a claim of continuous model inference in the web process.
 
 A fresh disposable PostgreSQL 16 + pgvector database accepted all six core migrations and the optional vector schema. All vector integration tests ran locally. On Linux/Node v24.19.0, 100 fixture products, 384 dimensions and 50 measured queries after warm-up, pgvector retrieval measured median **4.038 ms**, p95 **4.878 ms**; warm Redis queries measured median **0.405 ms**, p95 **1.023 ms**. These use deterministic fixture vectors and exclude model inference, network hosting and relevance quality. Reproduce with `BENCHMARK_DATABASE_URL=<isolated pgvector URL ending _test> npm run benchmark:search`. Real model latency/quality still needs validation with the deployed model and merchant catalog; the under-100ms brief target is not a universal guarantee.
+
+## Stage 10: integrated release artifact
+
+The API contract is served as OpenAPI 3.1. Administrative deep health includes dependency timing, worker freshness, durable queue backlog, process-local catalog cache counters and V8 memory limits; public endpoints remain shallow/safe. Browser CI now starts the API and a real independent worker, proves checkout events reach `WAITING_PAYMENT`, and runs the authenticated full-stack smoke command. CI also boots the non-root production API and worker images together, checking actual worker heartbeat, before building the combined Render staging image. See [release.md](release.md) for protected environments, direct-connection migrations, live sandbox boundaries, monitoring and rollback.
+
+```mermaid
+flowchart LR
+  Checkout[Checkout transaction] --> PG[(PostgreSQL order + outbox)]
+  PG --> Dispatch[Outbox dispatcher]
+  Dispatch --> Redis[Redis Streams consumer group]
+  Redis --> Worker[Independent idempotent worker]
+  Worker --> PG
+  Worker --> Ledger[Processing receipt or durable retry/dead letter]
+```
+
+The original roadmap stages are now covered by either the preserved production implementation or the added isolated exercises, security/cache work, durable workers and release tooling. Provider credentials, cloud plan upgrades, production restores and a real Paystack merchant sandbox charge are not fabricated or performed by test fixtures.

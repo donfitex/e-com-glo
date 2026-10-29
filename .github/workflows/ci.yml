@@ -48,4 +48,16 @@ jobs:
       - run: npm run web:test:e2e
       - run: docker build -t e-com-global:ci .
 
+      - name: Smoke-test production API and worker containers
+        env:
+          REDIS_URL: redis://127.0.0.1:6379/12
+          JWT_SECRET: container-ci-only-secret-at-least-32-characters
+          CORS_ORIGINS: http://localhost:3001
+        run: |
+          set -euo pipefail
+          trap 'docker rm -f ecom-ci-api ecom-ci-worker >/dev/null 2>&1 || true' EXIT
+          docker run -d --name ecom-ci-api --network host -e NODE_ENV=production -e PORT=3103 -e DATABASE_URL -e REDIS_URL -e JWT_SECRET -e CORS_ORIGINS -e LOG_LEVEL=warn e-com-global:ci
+          docker run -d --name ecom-ci-worker --network host -e DATABASE_URL -e REDIS_URL -e LOG_LEVEL=warn e-com-global:ci node dist/workers/order-events.js
+          docker exec ecom-ci-api node -e '(async()=>{const {JwtTokens}=require("./dist/modules/auth/security");const token=new JwtTokens(process.env.JWT_SECRET).sign({sub:"e241484c-f388-4d9b-9cd7-f35ccab53280",role:"ADMIN"});for(let attempt=0;attempt<20;attempt++){try{const r=await fetch("http://127.0.0.1:3103/api/v1/admin/health",{headers:{Authorization:"Bearer "+token},signal:AbortSignal.timeout(2000)});if(r.ok&&(await r.json()).data.worker.healthy){console.log("Production API and worker smoke checks passed");return}}catch{}await new Promise(resolve=>setTimeout(resolve,1000))}process.exit(1)})().catch(()=>process.exit(1))'
+
       - run: docker build -f Dockerfile.staging -t e-com-global:staging-ci .

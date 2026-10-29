@@ -132,7 +132,7 @@ export class OrderStreamWorker {
     for (const stream of streams ?? []) await this.consume(stream.messages);
     await deadline(
       this.redis.set('ecom:worker:heartbeat', new Date().toISOString(), {
-        EX: 60,
+        EX: 180,
       }),
     );
   }

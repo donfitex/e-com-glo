@@ -2,6 +2,12 @@ import 'dotenv/config';
 import { z } from 'zod';
 import { checkoutRules } from './modules/checkout/policy';
 export const configSchema = z.object({
+  API_RATE_LIMIT_PER_MINUTE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10000)
+    .default(120),
   CACHE_TTL_SECONDS: z.coerce.number().int().min(1).max(86400).default(3600),
   CHECKOUT_RULES_JSON: z
     .string()

@@ -4,7 +4,7 @@ export default defineConfig({
   webServer: process.env.CI
     ? [
         {
-          command: 'node ../dist/index.js',
+          command: 'node ../scripts/start-test-api.mjs',
           url: 'http://127.0.0.1:3000/ready',
           timeout: 60000,
           reuseExistingServer: false,
@@ -22,6 +22,7 @@ export default defineConfig({
               },
             ]),
             PORT: '3000',
+            API_RATE_LIMIT_PER_MINUTE: '600',
           },
         },
         {

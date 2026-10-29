@@ -471,6 +471,49 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
       .expect(200);
     expect(denied.headers['access-control-allow-origin']).toBeUndefined();
   });
+  test('OpenAPI is public and deep diagnostics require administrator access', async () => {
+    const contract = await request(app).get('/api/v1/openapi.json').expect(200);
+    expect(contract.body.openapi).toBe('3.1.0');
+    expect(
+      contract.body.paths['/api/v1/orders/checkout'].post.parameters[0].name,
+    ).toBe('Idempotency-Key');
+    await request(app).get('/api/v1/admin/health').expect(401);
+    await request(app)
+      .get('/api/v1/admin/health')
+      .set(auth(customer))
+      .expect(403);
+    const health = await request(app)
+      .get('/api/v1/admin/health')
+      .set(auth(admin))
+      .expect(200);
+    expect(health.body.data.memory.heapUsedBytes).toBeGreaterThan(0);
+    expect(health.body.data.cache).toHaveProperty('hits');
+    expect(JSON.stringify(health.body)).not.toMatch(
+      /postgresql:|redis:\/\/|password|token/i,
+    );
+    const monitored = createApp(config, {
+      db,
+      cache,
+      limiter,
+      tokens,
+      passwords: new ScryptHasher(),
+      logger: pino({ level: 'silent' }),
+      ready: async () => {},
+      workerHeartbeat: async () => null,
+    });
+    const degraded = await request(monitored)
+      .get('/api/v1/admin/health')
+      .set(auth(admin))
+      .expect(503);
+    expect(degraded.body.data.worker).toMatchObject({
+      configured: true,
+      healthy: false,
+    });
+    await request(app)
+      .get('/api/v1/admin/events')
+      .set(auth(customer))
+      .expect(403);
+  });
   test('liveness, dependency readiness, headers and safe errors', async () => {
     expect((await request(app).get('/health')).body.service).toBe(
       'E-com Global',

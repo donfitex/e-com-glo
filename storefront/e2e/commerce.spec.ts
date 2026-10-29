@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { test, expect } from '@playwright/test';
 import sharp from 'sharp';
 import { PrismaClient } from '@prisma/client';
@@ -83,6 +85,16 @@ test('customer journey: discover, register, add to bag, quote and place unpaid o
   await expect(page).toHaveURL(/\/checkout\/payment\?order=/);
   await expect(page.getByText('UNPAID', { exact: true })).toBeVisible();
   const createdOrder = new URL(page.url()).searchParams.get('order');
+  await expect
+    .poll(
+      async () =>
+        (
+          await db.orderWorkItem.findUnique({
+            where: { orderId: createdOrder! },
+          })
+        )?.state,
+    )
+    .toBe('WAITING_PAYMENT');
   await page.goto(
     `/checkout/payment?order=${createdOrder}&reference=untrusted-callback`,
   );
@@ -344,4 +356,26 @@ test('buyer tracks a paid order while admin saves shipping details and marks it 
   } finally {
     await adminContext.close();
   }
+});
+
+test('release smoke checks validate the running full-stack app and independent worker', async ({
+  baseURL,
+}) => {
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    ['../scripts/smoke-release.mjs'],
+    {
+      env: {
+        ...process.env,
+        SMOKE_BASE_URL: baseURL,
+        SMOKE_EMAIL: adminEmail,
+        SMOKE_PASSWORD: password,
+      },
+      timeout: 30000,
+    },
+  );
+  const report = JSON.parse(stdout);
+  expect(report.authenticatedChecks).toBe('passed');
+  expect(report.checks).toContain('OpenAPI contract');
+  expect(report.checks).toContain('admin deep health and worker heartbeat');
 });

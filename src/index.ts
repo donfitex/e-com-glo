@@ -1,3 +1,4 @@
+import { deadline } from './shared/deadline';
 import { PaystackGateway } from './modules/payments/gateway';
 import { PaymentService } from './modules/payments/service';
 import { LocalEmbeddings } from './modules/search/embeddings';
@@ -62,8 +63,12 @@ async function main() {
     tokens: new JwtTokens(config.JWT_SECRET),
     passwords: new BcryptHasher(),
     logger,
+    workerHeartbeat: () => redis.get('ecom:worker:heartbeat'),
     ready: async () => {
-      await Promise.all([db.$queryRaw`SELECT 1`, redis.ping()]);
+      await Promise.all([
+        deadline(db.$queryRaw`SELECT 1`, 2500),
+        deadline(redis.ping()),
+      ]);
     },
   });
   const server = app.listen(config.PORT, () =>

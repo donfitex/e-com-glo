@@ -28,7 +28,8 @@
     "learn:crud": "tsx src/learning/mock-users.ts",
     "benchmark:cache": "tsx scripts/benchmark-cache.ts",
     "worker:orders": "node dist/workers/order-events.js",
-    "benchmark:search": "tsx scripts/benchmark-search.ts"
+    "benchmark:search": "tsx scripts/benchmark-search.ts",
+    "smoke:release": "node scripts/smoke-release.mjs"
   },
   "dependencies": {
     "@neon/config": "^1.9.5",
