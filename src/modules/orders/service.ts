@@ -1,3 +1,4 @@
+import { recordOrderEvent } from '../events/outbox';
 import { deliveryWindow, ShipmentInput } from './delivery';
 import { CheckoutPolicy } from '../checkout/policy';
 import { OrderStatus, Prisma } from '@prisma/client';
@@ -140,6 +141,7 @@ export class OrderService {
           },
           include: { items: true },
         });
+        await recordOrderEvent(tx, order.id, 'OrderCreated');
         await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
         await tx.auditEvent.create({
           data: {
@@ -270,6 +272,11 @@ export class OrderService {
           ...(status === 'DELIVERED' ? { deliveredAt: new Date() } : {}),
         },
       });
+      if (status === 'SHIPPED') await recordOrderEvent(tx, id, 'OrderShipped');
+      if (status === 'DELIVERED')
+        await recordOrderEvent(tx, id, 'OrderDelivered');
+      if (status === 'CANCELLED')
+        await recordOrderEvent(tx, id, 'OrderCancelled');
       await tx.auditEvent.create({
         data: {
           actorId,

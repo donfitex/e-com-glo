@@ -1,3 +1,4 @@
+import { recordOrderEvent } from '../events/outbox';
 import { deliveryWindow } from '../orders/delivery';
 import { z } from 'zod';
 import { address } from '../../shared/validation';
@@ -161,6 +162,8 @@ export class PaymentService {
                 providerTransactionId: notice.providerTransactionId,
               },
             });
+            if (!cancelled)
+              await recordOrderEvent(tx, order.id, 'PaymentConfirmed');
             await tx.auditEvent.create({
               data: {
                 action: cancelled
@@ -198,6 +201,7 @@ export class PaymentService {
       where: { id: order.id },
       data: { status: 'CANCELLED', paymentStatus: 'EXPIRED' },
     });
+    await recordOrderEvent(tx, order.id, 'OrderCancelled');
     await tx.auditEvent.create({
       data: { action: 'order.reservation_expired', entityId: order.id },
     });

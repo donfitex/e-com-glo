@@ -60,6 +60,10 @@ try {
       'node_modules/tsx/dist/cli.mjs',
       'scripts/provision-staging-admin.ts',
     ]);
+  const worker = child(['dist/workers/order-events.js']);
+  worker.once('exit', () => {
+    if (!stopping) shutdown(1);
+  });
   const api = child(['dist/index.js'], { ...serviceEnv, PORT: '3010' });
   api.once('exit', () => {
     if (!stopping) shutdown(1);

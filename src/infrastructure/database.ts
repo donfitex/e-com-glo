@@ -8,6 +8,8 @@ export interface Database extends Pick<
   | 'cartItem'
   | 'order'
   | 'auditEvent'
+  | 'outboxEvent'
+  | 'orderWorkItem'
   | 'paymentEvent'
   | 'productImage'
   | '$queryRaw'

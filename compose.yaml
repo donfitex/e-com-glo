@@ -14,6 +14,17 @@ services:
       retries: 10
   redis:
     image: redis:7-bookworm
+    command:
+      [
+        'redis-server',
+        '--appendonly',
+        'yes',
+        '--appendfsync',
+        'everysec',
+        '--maxmemory-policy',
+        'noeviction',
+      ]
+    volumes: ['redis_data:/data']
     ports: ['127.0.0.1:6379:6379']
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
@@ -30,5 +41,19 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+  worker:
+    build: .
+    command: ['node', 'dist/workers/order-events.js']
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://ecom:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/ecom?schema=public
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      disable: true
+
 volumes:
   postgres_data:
+  redis_data:

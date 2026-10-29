@@ -633,6 +633,7 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     await db.product.update({ where: { id: productId }, data: { stock: 1 } });
     expect((await checkout()).status).toBe(409);
     expect(await db.order.count()).toBe(0);
+    expect(await db.outboxEvent.count()).toBe(0);
     expect(await db.cartItem.count()).toBe(1);
     expect(
       (await db.product.findUniqueOrThrow({ where: { id: productId } })).stock,
@@ -657,6 +658,11 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     const results = await Promise.all([checkout(), checkout()]);
     expect(results.map((r) => r.status)).toEqual([201, 201]);
     expect(results[0].body.data.id).toBe(results[1].body.data.id);
+    expect(
+      await db.outboxEvent.count({
+        where: { orderId: results[0].body.data.id, type: 'OrderCreated' },
+      }),
+    ).toBe(1);
     expect(await db.order.count()).toBe(1);
   });
   test('customers cannot read other customers orders', async () => {

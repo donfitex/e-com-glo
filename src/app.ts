@@ -1,3 +1,4 @@
+import { OrderEventProcessor } from './modules/events/processor';
 import { ProductImages } from './modules/media/service';
 import { mediaRouter } from './modules/media/http';
 import { CheckoutPolicy } from './modules/checkout/policy';
@@ -18,7 +19,7 @@ import { Cache } from './infrastructure/cache';
 import { RateLimiter, rateLimit } from './infrastructure/rate-limit';
 import { AuthService } from './modules/auth/service';
 import { Tokens, PasswordHasher } from './modules/auth/security';
-import { authRouter, authenticate } from './modules/auth/http';
+import { authRouter, authenticate, admin } from './modules/auth/http';
 import { CatalogRepository } from './modules/catalog/repository';
 import { CatalogService } from './modules/catalog/service';
 import { catalogRouter } from './modules/catalog/http';
@@ -137,6 +138,41 @@ export function createApp(config: Config, deps: Dependencies) {
       },
     });
   });
+  app.get(
+    '/api/v1/admin/events',
+    guard,
+    admin,
+    endpoint(async (_req, res) => {
+      res.json({
+        data: await deps.db.outboxEvent.findMany({
+          where: { status: 'DEAD' },
+          select: {
+            id: true,
+            orderId: true,
+            type: true,
+            attempts: true,
+            lastError: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        }),
+      });
+    }),
+  );
+  app.post(
+    '/api/v1/admin/events/:id/retry',
+    guard,
+    admin,
+    endpoint(async (req, res) => {
+      res.status(202).json({
+        data: await new OrderEventProcessor(deps.db).retry(
+          res.locals.identity.sub,
+          id.parse(req.params.id),
+        ),
+      });
+    }),
+  );
   app.use('/api/v1', catalogRouter(catalog, guard));
   app.get(
     '/api/v1/search',
