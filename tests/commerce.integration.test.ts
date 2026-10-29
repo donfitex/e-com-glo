@@ -374,6 +374,38 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
       .send({ carrier: 'Test courier' })
       .expect(409);
   });
+  test('request logs contain ISO timing fields without credentials or bodies', async () => {
+    const lines: string[] = [];
+    const logged = createApp(config, {
+      db,
+      cache,
+      limiter,
+      tokens,
+      passwords: new ScryptHasher(),
+      logger: pino(
+        { level: 'info' },
+        {
+          write: (line: string) => {
+            lines.push(line);
+          },
+        },
+      ),
+      ready: async () => {},
+    });
+    await request(logged)
+      .get('/health?secret=never-log-this')
+      .set('Authorization', 'Bearer private-token')
+      .expect(200);
+    const record = JSON.parse(lines[0]!);
+    expect(record).toMatchObject({
+      method: 'GET',
+      path: '/health',
+      status: 200,
+    });
+    expect(new Date(record.timestamp).toISOString()).toBe(record.timestamp);
+    expect(typeof record.durationMs).toBe('number');
+    expect(lines.join('')).not.toMatch(/private-token|never-log-this/);
+  });
   test('liveness, dependency readiness, headers and safe errors', async () => {
     expect((await request(app).get('/health')).body.service).toBe(
       'E-com Global',

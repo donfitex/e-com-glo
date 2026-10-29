@@ -54,6 +54,7 @@ export function createApp(config: Config, deps: Dependencies) {
       deps.logger.info(
         {
           requestId: res.locals.requestId,
+          timestamp: new Date().toISOString(),
           method: req.method,
           path: req.path,
           status: res.statusCode,

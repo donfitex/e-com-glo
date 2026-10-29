@@ -28,3 +28,7 @@ Run `npm run learn:http`, then `curl -i http://127.0.0.1:3101/`, `curl -i http:/
 ## Stage 2: fault-tolerant aggregation
 
 `aggregate<T>` accepts named HTTPS sources with a Zod schema and an injected fetch implementation. It uses `Promise.allSettled`, five-second request deadlines, redirect rejection, a twenty-source bound and a 1 MiB response bound. Successful typed results survive failed peers; errors expose source labels and safe codes, not provider payloads. It is a library boundary, not a public URL-fetching endpoint. Native fetch/network I/O is not accelerated by increasing `UV_THREADPOOL_SIZE`; no misleading thread-pool benchmark is supplied.
+
+## Stage 3: Express CRUD and observability
+
+Run `npm run learn:crud` for the isolated loopback-only mock-user service on port 3102. It implements validated GET/POST/PATCH/DELETE `/api/users` resources with safe errors and no account/password operations. It is not mounted in production. Production middleware order remains request ID/logging → Helmet/CORS → raw signed webhooks and bounded images → JSON parser → shared rate limits → public routes → authenticated commerce routes → safe errors. Request logs include an explicit ISO timestamp, method, pathname, status and elapsed milliseconds; query strings, credentials and bodies are omitted. Optional integration API keys are not added where no integration route requires them.
