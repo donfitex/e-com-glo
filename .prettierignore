@@ -4,3 +4,11 @@ coverage
 work
 package-lock.json
 prisma/migrations
+
+storefront/.next
+storefront/node_modules
+storefront/package-lock.json
+storefront/next-env.d.ts
+storefront/tsconfig.tsbuildinfo
+storefront/test-results
+storefront/playwright-report

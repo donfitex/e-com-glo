@@ -1,0 +1,96 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { apiOrigin } from '@/lib/server-api';
+export const runtime = 'nodejs';
+const COOKIE = 'ecom_session';
+const allowed =
+  /^(auth\/(login|register|me|logout)|categories(?:\/[0-9a-f-]+)?|products(?:\/[0-9a-f-]+)?|search|cart(?:\/items(?:\/[0-9a-f-]+)?)?|orders(?:\/(?:preview|quote|checkout|[0-9a-f-]+(?:\/payment)?))?|admin\/(?:orders(?:\/[0-9a-f-]+\/status)?|products))$/;
+async function proxy(
+  req: NextRequest,
+  context: { params: Promise<{ path: string[] }> },
+) {
+  const path = (await context.params).path.join('/');
+  if (!allowed.test(path))
+    return NextResponse.json(
+      { error: { code: 'NOT_FOUND', message: 'Route not found' } },
+      { status: 404 },
+    );
+  if (req.method !== 'GET') {
+    const expected = process.env.STOREFRONT_ORIGIN ?? new URL(req.url).origin;
+    if (req.headers.get('origin') !== expected)
+      return NextResponse.json(
+        {
+          error: {
+            code: 'CSRF_REJECTED',
+            message: 'Request origin is not allowed',
+          },
+        },
+        { status: 403 },
+      );
+  }
+  if (path === 'auth/logout') {
+    if (req.method !== 'POST') return new NextResponse(null, { status: 405 });
+    const res = new NextResponse(null, { status: 204 });
+    res.cookies.delete(COOKIE);
+    return res;
+  }
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const token = req.cookies.get(COOKIE)?.value;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const key = req.headers.get('idempotency-key');
+  if (key) headers['Idempotency-Key'] = key;
+  try {
+    const body = req.method === 'GET' ? undefined : await req.text();
+    if (body && Buffer.byteLength(body) > 65536)
+      return NextResponse.json(
+        { error: { message: 'Request exceeds size limit' } },
+        { status: 413 },
+      );
+    const upstream = await fetch(
+      `${apiOrigin()}/api/v1/${path}${req.nextUrl.search}`,
+      {
+        method: req.method,
+        headers,
+        body,
+        cache: 'no-store',
+        signal: AbortSignal.timeout(15000),
+        redirect: 'error',
+      },
+    );
+    if (upstream.status === 204) return new NextResponse(null, { status: 204 });
+    const payload = await upstream.json();
+    let accessToken: string | undefined;
+    if (upstream.ok && ['auth/login', 'auth/register'].includes(path)) {
+      accessToken = payload.data.accessToken;
+      delete payload.data.accessToken;
+    }
+    const res = NextResponse.json(payload, {
+      status: upstream.status,
+      headers: { 'Cache-Control': 'no-store' },
+    });
+    if (accessToken)
+      res.cookies.set(COOKIE, accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 900,
+      });
+    if (upstream.status === 401) res.cookies.delete(COOKIE);
+    const retry = upstream.headers.get('retry-after');
+    if (retry) res.headers.set('Retry-After', retry);
+    return res;
+  } catch {
+    return NextResponse.json(
+      {
+        error: {
+          code: 'API_UNAVAILABLE',
+          message: 'The store is temporarily unavailable. Please try again.',
+        },
+      },
+      { status: 503 },
+    );
+  }
+}
+export { proxy as GET, proxy as POST, proxy as PATCH, proxy as DELETE };

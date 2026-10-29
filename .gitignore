@@ -154,3 +154,10 @@ work/
 # Optional local embedding service
 __pycache__/
 *.pyc
+
+# Next.js storefront
+storefront/.next/
+storefront/next-env.d.ts
+storefront/tsconfig.tsbuildinfo
+storefront/playwright-report/
+storefront/test-results/
