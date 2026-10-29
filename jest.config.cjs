@@ -1,6 +1,7 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  testMatch: ['**/tests/**/*.test.ts'],
+  testMatch: ['<rootDir>/tests/**/*.test.ts'],
   clearMocks: true,
+  modulePathIgnorePatterns: ['<rootDir>/storefront/'],
 };

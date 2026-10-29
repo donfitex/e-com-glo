@@ -18,7 +18,12 @@
     "admin:create": "tsx scripts/create-admin.ts",
     "test:integration": "jest --runInBand --testPathPattern=integration",
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
-    "search:index": "tsx scripts/reindex-search.ts"
+    "search:index": "tsx scripts/reindex-search.ts",
+    "web:dev": "npm --prefix storefront run dev",
+    "web:build": "npm --prefix storefront run build",
+    "web:typecheck": "npm --prefix storefront run typecheck",
+    "web:test:e2e": "npm --prefix storefront run test:e2e",
+    "db:seed:demo": "tsx scripts/seed-demo.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",
@@ -29,6 +34,7 @@
     "jsonwebtoken": "^9.0.3",
     "pino": "^10.4.0",
     "redis": "^4.6.13",
+    "stripe": "^23.0.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {

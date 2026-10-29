@@ -9,6 +9,21 @@ export function orderRouter(service: OrderService, guard: RequestHandler) {
   const r = Router();
   r.use(guard);
   r.post(
+    '/orders/quote',
+    endpoint(async (req, res) => {
+      const body = z
+        .object({ shippingAddress: address })
+        .strict()
+        .parse(req.body);
+      res.json({
+        data: await service.quote(
+          res.locals.identity.sub,
+          body.shippingAddress,
+        ),
+      });
+    }),
+  );
+  r.post(
     '/orders/checkout',
     endpoint(async (req, res) => {
       const key = z
@@ -18,7 +33,16 @@ export function orderRouter(service: OrderService, guard: RequestHandler) {
         .regex(/^[a-zA-Z0-9_-]+$/)
         .parse(req.headers['idempotency-key']);
       const body = z
-        .object({ shippingAddress: address })
+        .object({
+          shippingAddress: address,
+          quote: z
+            .object({
+              total: z.number().int().nonnegative(),
+              ruleVersion: z.string(),
+            })
+            .strict()
+            .optional(),
+        })
         .strict()
         .parse(req.body);
       res.status(201).json({
@@ -26,6 +50,7 @@ export function orderRouter(service: OrderService, guard: RequestHandler) {
           res.locals.identity.sub,
           key,
           body.shippingAddress,
+          body.quote,
         ),
       });
     }),

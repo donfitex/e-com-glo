@@ -1,3 +1,5 @@
+import { StripeGateway } from './modules/payments/gateway';
+import { PaymentService } from './modules/payments/service';
 import { LocalEmbeddings } from './modules/search/embeddings';
 import { PgVectorSearch } from './modules/search/vector-search';
 import { PrismaClient } from '@prisma/client';
@@ -20,7 +22,33 @@ async function main() {
   redis.on('error', () => logger.warn('Redis connection error'));
   await db.$connect();
   await redis.connect();
+  const paymentGateway =
+    config.STRIPE_SECRET_KEY && config.STRIPE_WEBHOOK_SECRET
+      ? new StripeGateway(
+          config.STRIPE_SECRET_KEY,
+          config.STRIPE_WEBHOOK_SECRET,
+          config.STOREFRONT_ORIGIN,
+        )
+      : undefined;
+  const paymentService = new PaymentService(
+    db,
+    new CatalogCache(redis),
+    paymentGateway,
+  );
+  let expiring = false;
+  const expiryTimer = setInterval(() => {
+    if (expiring) return;
+    expiring = true;
+    void paymentService
+      .expireUnpaid()
+      .catch(() => logger.error('Reservation expiration failed'))
+      .finally(() => {
+        expiring = false;
+      });
+  }, 60000);
+  expiryTimer.unref();
   const app = createApp(config, {
+    paymentGateway,
     db,
     semantic: config.SEMANTIC_SEARCH_URL
       ? new PgVectorSearch(
@@ -45,6 +73,7 @@ async function main() {
   const shutdown = () => {
     if (stopping) return;
     stopping = true;
+    clearInterval(expiryTimer);
     const timer = setTimeout(() => process.exit(1), 10000);
     timer.unref();
     server.close(() => {

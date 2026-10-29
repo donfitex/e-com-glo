@@ -10,6 +10,18 @@ export class CatalogService {
     private readonly db: Database,
     private readonly cache: Cache,
   ) {}
+  async adminList(page: number, limit: number) {
+    const [items, total] = await Promise.all([
+      this.db.product.findMany({
+        include: { category: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.db.product.count(),
+    ]);
+    return { items, total, page, limit };
+  }
   list(query: ProductQuery) {
     return this.cache.remember(`list:${JSON.stringify(query)}`, 30, () =>
       this.reader.list(query),

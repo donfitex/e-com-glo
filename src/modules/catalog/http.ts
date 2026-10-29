@@ -1,11 +1,20 @@
 import { Router, RequestHandler } from 'express';
-import { id } from '../../shared/validation';
+import { id, pagination } from '../../shared/validation';
 import { endpoint } from '../../shared/http';
 import { admin } from '../auth/http';
 import { CatalogService } from './service';
 import { categoryInput, productInput, productQuery } from './schemas';
 export function catalogRouter(service: CatalogService, guard: RequestHandler) {
   const r = Router();
+  r.get(
+    '/admin/products',
+    guard,
+    admin,
+    endpoint(async (req, res) => {
+      const q = pagination.parse(req.query);
+      res.json({ data: await service.adminList(q.page, q.limit) });
+    }),
+  );
   r.get(
     '/categories',
     endpoint(async (_req, res) =>

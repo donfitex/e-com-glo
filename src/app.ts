@@ -1,3 +1,8 @@
+import { CheckoutPolicy } from './modules/checkout/policy';
+import { PaymentService } from './modules/payments/service';
+import { PaymentGateway } from './modules/payments/gateway';
+import { id } from './shared/validation';
+import { z } from 'zod';
 import express, { ErrorRequestHandler } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -25,6 +30,7 @@ import { endpoint } from './shared/http';
 import { AppError } from './shared/errors';
 import { SearchService, SemanticSearch } from './modules/search/service';
 export interface Dependencies {
+  paymentGateway?: PaymentGateway;
   semantic?: SemanticSearch;
   db: Database;
   cache: Cache;
@@ -59,6 +65,16 @@ export function createApp(config: Config, deps: Dependencies) {
   app.use(helmet());
   app.use(
     cors({ origin: config.CORS_ORIGINS.split(',').map((x) => x.trim()) }),
+  );
+  const payments = new PaymentService(deps.db, deps.cache, deps.paymentGateway);
+  app.post(
+    '/api/v1/payments/stripe/webhook',
+    express.raw({ type: 'application/json', limit: '64kb' }),
+    endpoint(async (req, res) => {
+      const signature = z.string().parse(req.headers['stripe-signature']);
+      await payments.webhook(req.body as Buffer, signature);
+      res.json({ received: true });
+    }),
   );
   app.use(express.json({ limit: '64kb' }));
   app.get('/health', (_req, res) =>
@@ -114,9 +130,29 @@ export function createApp(config: Config, deps: Dependencies) {
       }),
     ),
   );
+  app.post(
+    '/api/v1/orders/:id/payment',
+    guard,
+    endpoint(async (req, res) =>
+      res.json({
+        data: await payments.start(
+          res.locals.identity.sub,
+          id.parse(req.params.id),
+        ),
+      }),
+    ),
+  );
   app.use(
     '/api/v1',
-    orderRouter(new OrderService(deps.db, pricing, deps.cache), guard),
+    orderRouter(
+      new OrderService(
+        deps.db,
+        pricing,
+        deps.cache,
+        new CheckoutPolicy(config.CHECKOUT_RULES_JSON),
+      ),
+      guard,
+    ),
   );
   app.use((_req, _res, next) =>
     next(new AppError(404, 'NOT_FOUND', 'Route not found')),

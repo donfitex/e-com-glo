@@ -1,3 +1,4 @@
+import { CheckoutPolicy } from '../checkout/policy';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { Database, serializable } from '../../infrastructure/database';
 import { PricingService } from '../cart/pricing';
@@ -16,8 +17,27 @@ export class OrderService {
     private readonly db: Database,
     private readonly pricing: PricingService,
     private readonly cache: Cache,
+    private readonly policy: CheckoutPolicy,
   ) {}
-  async checkout(userId: string, key: string, shippingAddress: Address) {
+  async quote(userId: string, shippingAddress: Address) {
+    const cart = await this.db.cart.findUnique({
+      where: { userId },
+      include: { items: { include: { product: true } } },
+    });
+    assert(cart?.items.length, 409, 'EMPTY_CART', 'Cart is empty');
+    const subtotal = this.pricing.calculate(cart.items);
+    return this.policy.quote(
+      subtotal.total,
+      subtotal.currency!,
+      shippingAddress.country,
+    );
+  }
+  async checkout(
+    userId: string,
+    key: string,
+    shippingAddress: Address,
+    expected?: { total: number; ruleVersion: string },
+  ) {
     const execute = () =>
       serializable(this.db, async (tx) => {
         const existing = await tx.order.findUnique({
@@ -50,6 +70,19 @@ export class OrderService {
         });
         assert(cart?.items.length, 409, 'EMPTY_CART', 'Cart is empty');
         const quote = this.pricing.calculate(cart.items);
+        const totals = this.policy.quote(
+          quote.total,
+          quote.currency!,
+          shippingAddress.country,
+        );
+        if (expected)
+          assert(
+            expected.total === totals.total &&
+              expected.ruleVersion === totals.ruleVersion,
+            409,
+            'QUOTE_CHANGED',
+            'Prices or delivery rules changed. Review the updated quote.',
+          );
         for (const item of cart.items) {
           const result = await tx.product.updateMany({
             where: {
@@ -72,7 +105,11 @@ export class OrderService {
             idempotencyKey: key,
             shippingAddress,
             currency: quote.currency!,
-            total: quote.total,
+            total: totals.total,
+            subtotal: totals.subtotal,
+            shipping: totals.shipping,
+            tax: totals.tax,
+            ruleVersion: totals.ruleVersion,
             items: {
               create: quote.items.map(({ lineTotal: _, ...line }) => {
                 void _;
@@ -145,6 +182,21 @@ export class OrderService {
           409,
           'INVALID_TRANSITION',
           `Cannot transition ${order.status} to ${status}`,
+        );
+      assert(
+        (order.paymentStatus !== 'PAID' &&
+          order.paymentStatus !== 'REFUND_REQUIRED') ||
+          status !== 'CANCELLED',
+        409,
+        'REFUND_REQUIRED',
+        'Paid orders require a verified refund before cancellation',
+      );
+      if (status === 'CONFIRMED')
+        assert(
+          order.paymentStatus === 'PAID',
+          409,
+          'PAYMENT_REQUIRED',
+          'Payment must be verified before fulfillment',
         );
       if (status === 'CANCELLED')
         for (const item of [...order.items].sort((a, b) =>

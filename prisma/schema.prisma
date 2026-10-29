@@ -16,6 +16,12 @@ enum OrderStatus {
  DELIVERED
  CANCELLED
 }
+enum PaymentStatus {
+ UNPAID
+ PAID
+ EXPIRED
+ REFUND_REQUIRED
+}
 model User {
  id String @id @default(uuid()) @db.Uuid
  email String @unique
@@ -72,6 +78,14 @@ model Order {
  status OrderStatus @default(PENDING)
  currency String @db.VarChar(3)
  total Int
+ subtotal Int @default(0)
+ shipping Int @default(0)
+ tax Int @default(0)
+ ruleVersion String @default("legacy")
+ paymentStatus PaymentStatus @default(UNPAID)
+ stripeSessionId String? @unique
+ paymentIntentId String?
+ expiresAt DateTime @default(dbgenerated("now() + interval '60 minutes'"))
  shippingAddress Json
  idempotencyKey String @db.VarChar(100)
  createdAt DateTime @default(now())
@@ -79,6 +93,7 @@ model Order {
  @@unique([userId,idempotencyKey])
  @@index([userId,createdAt,id])
  @@index([status,createdAt,id])
+ @@index([status,paymentStatus,expiresAt])
 }
 model OrderItem {
  id String @id @default(uuid()) @db.Uuid
@@ -99,4 +114,12 @@ model AuditEvent {
  metadata Json @default("{}")
  createdAt DateTime @default(now())
  @@index([createdAt])
+}
+
+model PaymentEvent {
+ id String @id
+ orderId String @db.Uuid
+ kind String
+ createdAt DateTime @default(now())
+ @@index([orderId])
 }

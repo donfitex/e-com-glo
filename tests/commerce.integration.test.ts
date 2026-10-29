@@ -1,3 +1,5 @@
+import { PaymentService } from '../src/modules/payments/service';
+import { PaymentGateway, PaymentNotice } from '../src/modules/payments/gateway';
 import request from 'supertest';
 import { PrismaClient } from '@prisma/client';
 import { createClient } from 'redis';
@@ -33,6 +35,9 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     JWT_SECRET: 'integration-only-secret-at-least-32-characters',
     CORS_ORIGINS: 'https://shop.example',
     NODE_ENV: 'test',
+    CHECKOUT_RULES_JSON: JSON.stringify([
+      { country: 'NG', currency: 'USD', shipping: 0, taxBasisPoints: 0 },
+    ]),
   });
   const app = createApp(config, {
     db,
@@ -384,5 +389,153 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     expect((await second.consume('integration-shared', 1, 60)).allowed).toBe(
       false,
     );
+  });
+  test('checkout quotes destination totals and rejects stale quotes', async () => {
+    await add();
+    const quote = await request(app)
+      .post('/api/v1/orders/quote')
+      .set(auth(customer))
+      .send({ shippingAddress });
+    expect(quote.status).toBe(200);
+    expect(quote.body.data.total).toBe(1999);
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/orders/quote')
+          .set(auth(customer))
+          .send({ shippingAddress: { ...shippingAddress, country: 'ZZ' } })
+      ).status,
+    ).toBe(422);
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/orders/checkout')
+          .set(auth(customer))
+          .set('Idempotency-Key', 'quote-guard-key')
+          .send({
+            shippingAddress,
+            quote: { total: 1, ruleVersion: quote.body.data.ruleVersion },
+          })
+      ).status,
+    ).toBe(409);
+  });
+  test('verified payment notifications confirm an order exactly once', async () => {
+    await add();
+    const result = await checkout();
+    const orderId = result.body.data.id;
+    const notice: PaymentNotice = {
+      id: 'evt_' + orderId,
+      type: 'paid',
+      orderId,
+      sessionId: 'cs_' + orderId,
+      amount: 1999,
+      currency: 'USD',
+    };
+    const gateway: PaymentGateway = {
+      create: async () => ({
+        id: 'cs_' + orderId,
+        url: 'https://checkout.stripe.com/test',
+      }),
+      expire: async () => {},
+      verify: () => notice,
+    };
+    const payments = new PaymentService(db, cache, gateway);
+    await payments.webhook(Buffer.from('fixture'), 'fixture');
+    await payments.webhook(Buffer.from('fixture'), 'fixture');
+    expect(await db.order.findUnique({ where: { id: orderId } })).toMatchObject(
+      { status: 'CONFIRMED', paymentStatus: 'PAID' },
+    );
+    expect(await db.paymentEvent.count({ where: { orderId } })).toBe(1);
+    expect(
+      (
+        await request(app)
+          .patch(`/api/v1/admin/orders/${orderId}/status`)
+          .set(auth(admin))
+          .send({ status: 'CANCELLED' })
+      ).status,
+    ).toBe(409);
+  });
+  test('amount mismatch cannot mark an order paid or consume an event', async () => {
+    await add();
+    const orderId = (await checkout()).body.data.id;
+    const gateway: PaymentGateway = {
+      create: async () => ({
+        id: 'unused',
+        url: 'https://checkout.stripe.com/test',
+      }),
+      expire: async () => {},
+      verify: () => ({
+        id: 'evt_wrong_' + orderId,
+        type: 'paid',
+        orderId,
+        sessionId: 'cs_' + orderId,
+        amount: 1,
+        currency: 'USD',
+      }),
+    };
+    await expect(
+      new PaymentService(db, cache, gateway).webhook(
+        Buffer.from('fixture'),
+        'fixture',
+      ),
+    ).rejects.toThrow('does not match');
+    expect(await db.order.findUnique({ where: { id: orderId } })).toMatchObject(
+      { paymentStatus: 'UNPAID', status: 'PENDING' },
+    );
+    expect(await db.paymentEvent.count({ where: { orderId } })).toBe(0);
+  });
+  test('expired unpaid reservations release stock once; late payment requires refund review', async () => {
+    await add();
+    const orderId = (await checkout()).body.data.id;
+    await db.order.update({
+      where: { id: orderId },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    const notice: PaymentNotice = {
+      id: 'evt_late_' + orderId,
+      type: 'paid',
+      orderId,
+      sessionId: 'cs_' + orderId,
+      amount: 1999,
+      currency: 'USD',
+    };
+    const gateway: PaymentGateway = {
+      create: async () => ({
+        id: 'unused',
+        url: 'https://checkout.stripe.com/test',
+      }),
+      expire: async () => {},
+      verify: () => notice,
+    };
+    const payments = new PaymentService(db, cache, gateway);
+    await payments.expireUnpaid();
+    await payments.expireUnpaid();
+    expect(
+      (await db.product.findUniqueOrThrow({ where: { id: productId } })).stock,
+    ).toBe(10);
+    await payments.webhook(Buffer.from('fixture'), 'fixture');
+    expect(await db.order.findUnique({ where: { id: orderId } })).toMatchObject(
+      { status: 'CANCELLED', paymentStatus: 'REFUND_REQUIRED' },
+    );
+  });
+  test('unpaid orders cannot be manually confirmed and payment setup fails clearly', async () => {
+    await add();
+    const orderId = (await checkout()).body.data.id;
+    expect(
+      (
+        await request(app)
+          .patch(`/api/v1/admin/orders/${orderId}/status`)
+          .set(auth(admin))
+          .send({ status: 'CONFIRMED' })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await request(app)
+          .post(`/api/v1/orders/${orderId}/payment`)
+          .set(auth(customer))
+          .send({})
+      ).status,
+    ).toBe(503);
   });
 });
