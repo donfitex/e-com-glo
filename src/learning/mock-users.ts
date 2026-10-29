@@ -78,24 +78,22 @@ export function mockUsersApp() {
     const invalid = error instanceof z.ZodError || error instanceof SyntaxError;
     const status =
       error instanceof AppError ? error.status : invalid ? 400 : 500;
-    res
-      .status(status)
-      .json({
-        error: {
-          code:
-            error instanceof AppError
-              ? error.code
-              : invalid
-                ? 'VALIDATION_ERROR'
-                : 'INTERNAL_ERROR',
-          message:
-            error instanceof AppError
-              ? error.message
-              : invalid
-                ? 'Invalid request'
-                : 'Request failed',
-        },
-      });
+    res.status(status).json({
+      error: {
+        code:
+          error instanceof AppError
+            ? error.code
+            : invalid
+              ? 'VALIDATION_ERROR'
+              : 'INTERNAL_ERROR',
+        message:
+          error instanceof AppError
+            ? error.message
+            : invalid
+              ? 'Invalid request'
+              : 'Request failed',
+      },
+    });
   };
   app.use(errors);
   return app;

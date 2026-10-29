@@ -17,6 +17,7 @@ async function main() {
   const redis = createClient({
     url: config.REDIS_URL,
     disableOfflineQueue: true,
+    commandsQueueMaxLength: 1000,
     socket: { connectTimeout: 5000 },
   });
   redis.on('error', () => logger.warn('Redis connection error'));

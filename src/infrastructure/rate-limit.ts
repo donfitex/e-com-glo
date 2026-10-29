@@ -1,3 +1,4 @@
+import { deadline } from '../shared/deadline';
 import { RequestHandler, Request } from 'express';
 import { createHash } from 'node:crypto';
 import { Redis } from './cache';
@@ -11,9 +12,11 @@ export interface RateLimiter {
 export class RedisRateLimiter implements RateLimiter {
   constructor(private readonly redis: Redis) {}
   async consume(key: string, limit: number, windowSeconds: number) {
-    const result = (await this.redis.eval(
-      `local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],ARGV[1]) end; return {n,redis.call('TTL',KEYS[1])}`,
-      { keys: [`rate:${key}`], arguments: [String(windowSeconds)] },
+    const result = (await deadline(
+      this.redis.eval(
+        `local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],ARGV[1]) end; return {n,redis.call('TTL',KEYS[1])}`,
+        { keys: [`rate:${key}`], arguments: [String(windowSeconds)] },
+      ),
     )) as number[];
     return {
       allowed: result[0]! <= limit,

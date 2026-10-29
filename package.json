@@ -25,7 +25,8 @@
     "web:test:e2e": "npm --prefix storefront run test:e2e",
     "db:seed:demo": "tsx scripts/seed-demo.ts",
     "learn:http": "tsx src/learning/native-server.ts",
-    "learn:crud": "tsx src/learning/mock-users.ts"
+    "learn:crud": "tsx src/learning/mock-users.ts",
+    "benchmark:cache": "tsx scripts/benchmark-cache.ts"
   },
   "dependencies": {
     "@neon/config": "^1.9.5",

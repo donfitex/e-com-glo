@@ -109,6 +109,7 @@ export function createApp(config: Config, deps: Dependencies) {
     new CatalogRepository(deps.db),
     deps.db,
     deps.cache,
+    config.CACHE_TTL_SECONDS,
   );
   app.use(
     '/api/v1/auth',

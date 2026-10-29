@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { z } from 'zod';
 import { checkoutRules } from './modules/checkout/policy';
 export const configSchema = z.object({
+  CACHE_TTL_SECONDS: z.coerce.number().int().min(1).max(86400).default(3600),
   CHECKOUT_RULES_JSON: z
     .string()
     .default('[]')

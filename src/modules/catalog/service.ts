@@ -9,6 +9,7 @@ export class CatalogService {
     private readonly reader: CatalogReader,
     private readonly db: Database,
     private readonly cache: Cache,
+    private readonly ttlSeconds = 3600,
   ) {}
   async adminList(page: number, limit: number) {
     const [items, total] = await Promise.all([
@@ -23,19 +24,23 @@ export class CatalogService {
     return { items, total, page, limit };
   }
   list(query: ProductQuery) {
-    return this.cache.remember(`list:${JSON.stringify(query)}`, 30, () =>
-      this.reader.list(query),
+    return this.cache.remember(
+      `list:${JSON.stringify(query)}`,
+      this.ttlSeconds,
+      () => this.reader.list(query),
     );
   }
   async detail(id: string) {
-    const item = await this.cache.remember(`product:${id}`, 30, () =>
-      this.reader.detail(id),
+    const item = await this.cache.remember(
+      `product:${id}`,
+      this.ttlSeconds,
+      () => this.reader.detail(id),
     );
     assert(item, 404, 'NOT_FOUND', 'Product not found');
     return item;
   }
   categories() {
-    return this.cache.remember('categories', 30, () =>
+    return this.cache.remember('categories', this.ttlSeconds, () =>
       this.reader.categories(),
     );
   }
