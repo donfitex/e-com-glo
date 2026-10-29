@@ -3332,3 +3332,20 @@ button {
   color: var(--muted);
   margin-bottom: 0;
 }
+.forgot-password-link {
+  display: inline-flex;
+  margin: 12px 0 6px;
+}
+.recovery-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+}
+.recovery-complete {
+  display: grid;
+  gap: 14px;
+}
+.recovery-complete > svg {
+  color: var(--green);
+}

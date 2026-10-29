@@ -59,6 +59,7 @@ export class BcryptHasher implements PasswordHasher {
 const identity = z.object({
   sub: z.string().uuid(),
   role: z.enum(['CUSTOMER', 'ADMIN']),
+  version: z.number().int().nonnegative().optional(),
 });
 export type Identity = z.infer<typeof identity>;
 export interface Tokens {
@@ -68,7 +69,7 @@ export interface Tokens {
 export class JwtTokens implements Tokens {
   constructor(private readonly secret: string) {}
   sign(user: Identity) {
-    return jwt.sign({ role: user.role }, this.secret, {
+    return jwt.sign({ role: user.role, version: user.version }, this.secret, {
       subject: user.sub,
       expiresIn: '15m',
       algorithm: 'HS256',

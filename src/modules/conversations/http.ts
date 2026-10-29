@@ -1,3 +1,4 @@
+import { recoveryEnvelope } from '../recovery/message-keys';
 import { Router, RequestHandler } from 'express';
 import { z } from 'zod';
 import { endpoint } from '../../shared/http';
@@ -15,6 +16,22 @@ export function conversationRouter(
 ) {
   const r = Router();
   r.use(guard);
+  r.get(
+    '/recovery-key',
+    endpoint(async (_q, s) => s.json({ data: await service.recoveryKey() })),
+  );
+  r.post(
+    '/recovery',
+    limit,
+    endpoint(async (q, s) =>
+      s.json({
+        data: await service.saveRecovery(
+          s.locals.identity,
+          recoveryEnvelope.parse(q.body),
+        ),
+      }),
+    ),
+  );
   r.get(
     '/vault',
     endpoint(async (_q, s) =>

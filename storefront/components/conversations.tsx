@@ -299,8 +299,8 @@ function ConversationPanel() {
           <span className="eyebrow muted">HERE TO HELP, EVERY STEP</span>
           <h1>{admin ? 'Customer conversations' : 'Your private inbox'}</h1>
           <p>
-            Replies, updates and a little peace of mind. Messages are end-to-end
-            encrypted.
+            Replies, updates and a little peace of mind. Private messages, with
+            seamless account recovery.
           </p>
         </div>
         {!admin && (

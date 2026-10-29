@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { recoveryEnvelope } from '../recovery/message-keys';
 import { id } from '../../shared/validation';
 import { publicJwk } from '../inbox/schema';
 const base64 = z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/);
@@ -16,7 +17,12 @@ export const customerBackup = z
   })
   .strict();
 export const customerKeyInput = z
-  .object({ id, publicJwk, backup: customerBackup.optional() })
+  .object({
+    id,
+    publicJwk,
+    backup: customerBackup.optional(),
+    recovery: recoveryEnvelope.optional(),
+  })
   .strict();
 export const conversationEnvelope = z
   .object({

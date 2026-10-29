@@ -1,3 +1,5 @@
+import { ResetEmailWorker } from '../modules/recovery/service';
+import { ResendResetMailer } from '../modules/recovery/mailer';
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { createClient } from 'redis';
@@ -41,12 +43,26 @@ async function main() {
   };
   process.once('SIGTERM', stop);
   process.once('SIGINT', stop);
+  const emailWorker =
+    process.env.RESEND_API_KEY &&
+    process.env.EMAIL_FROM &&
+    process.env.JWT_SECRET
+      ? new ResetEmailWorker(
+          db,
+          process.env.JWT_SECRET,
+          new ResendResetMailer(
+            process.env.RESEND_API_KEY,
+            process.env.EMAIL_FROM,
+          ),
+        )
+      : null;
   const worker = new OrderStreamWorker(db, redis, undefined, abort.signal);
   logger.info('Order event worker started');
   try {
     while (!stopping) {
       try {
         await worker.tick();
+        await emailWorker?.tick();
       } catch {
         logger.warn(
           'Order worker dependency unavailable; durable events retained for retry',

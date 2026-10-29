@@ -23,6 +23,9 @@ export interface Database extends Pick<
   | 'broadcastReceipt'
   | 'customerPreferences'
   | 'savedAddress'
+  | 'passwordReset'
+  | 'resetEmail'
+  | 'messageRecoveryKey'
   | '$queryRaw'
 > {
   $transaction<T>(

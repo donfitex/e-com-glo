@@ -1,3 +1,7 @@
+import {
+  ManagedMessageRecovery,
+  recoveryEnvelope,
+} from '../recovery/message-keys';
 import { createHash, createPublicKey } from 'node:crypto';
 import { z } from 'zod';
 import { Database, serializable } from '../../infrastructure/database';
@@ -5,7 +9,36 @@ import { assert, AppError } from '../../shared/errors';
 import { Actor, Envelope, customerKeyInput, startConversation } from './schema';
 const publicSelect = { id: true, publicJwk: true, fingerprint: true } as const;
 export class ConversationService {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly recovery?: ManagedMessageRecovery,
+  ) {}
+  async recoveryKey() {
+    assert(
+      this.recovery,
+      503,
+      'RECOVERY_UNAVAILABLE',
+      'Recovery service unavailable',
+    );
+    return this.recovery.publicKey();
+  }
+  async saveRecovery(actor: Actor, input: z.infer<typeof recoveryEnvelope>) {
+    const key = await this.db.customerInboxKey.findUnique({
+      where: { userId: actor.sub },
+    });
+    assert(
+      key && this.recovery,
+      404,
+      'NOT_FOUND',
+      'Account messaging key not found',
+    );
+    await this.recovery.validate(input, actor.sub, key.id);
+    await this.db.customerInboxKey.update({
+      where: { id: key.id },
+      data: { managedRecovery: input },
+    });
+    return { saved: true };
+  }
   async vault(actor: Actor) {
     const key = await this.db.customerInboxKey.findUnique({
       where: { userId: actor.sub },
@@ -46,6 +79,15 @@ export class ConversationService {
     const fingerprint = createHash('sha256')
       .update(key.export({ type: 'spki', format: 'der' }))
       .digest('hex');
+    if (input.recovery) {
+      assert(
+        this.recovery,
+        503,
+        'RECOVERY_UNAVAILABLE',
+        'Recovery service unavailable',
+      );
+      await this.recovery.validate(input.recovery, actor.sub, input.id);
+    }
     if (input.backup)
       assert(
         input.backup.keyId === input.id &&
@@ -74,7 +116,14 @@ export class ConversationService {
         };
       }
       return tx.customerInboxKey.create({
-        data: { ...input, userId: actor.sub, fingerprint },
+        data: {
+          id: input.id,
+          publicJwk: input.publicJwk,
+          backup: input.backup,
+          managedRecovery: input.recovery,
+          userId: actor.sub,
+          fingerprint,
+        },
         select: publicSelect,
       });
     });

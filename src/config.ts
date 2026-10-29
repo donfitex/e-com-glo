@@ -2,6 +2,9 @@ import 'dotenv/config';
 import { z } from 'zod';
 import { checkoutRules } from './modules/checkout/policy';
 export const configSchema = z.object({
+  MESSAGE_RECOVERY_SECRET: z.string().min(32).optional(),
+  RESEND_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM: z.string().min(3).max(254).optional(),
   API_RATE_LIMIT_PER_MINUTE: z.coerce
     .number()
     .int()

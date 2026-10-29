@@ -369,12 +369,38 @@ export const openapi = {
         '204',
       ),
     }),
+    '/api/v1/auth/forgot-password': {
+      post: publicOperation(
+        'Request a single-use 30-minute reset link; same response for known and unknown accounts',
+        object({ email: { ...text, format: 'email' } }),
+        '202',
+      ),
+    },
+    '/api/v1/auth/reset-password': {
+      post: publicOperation(
+        'Consume reset token once, replace password and revoke previous sessions',
+        object({
+          token: { ...text, pattern: '^[a-f0-9]{64}$' },
+          password: { ...text, minLength: 12, maxLength: 128 },
+        }),
+      ),
+    },
     '/api/v1/conversations/key': {
       get: secured('Current participant public encryption key'),
       post: secured(
         'Customer: register an immutable public key and password-encrypted backup',
         undefined,
         '201',
+      ),
+    },
+    '/api/v1/conversations/recovery-key': {
+      get: secured(
+        'Public store-managed customer key recovery recipient; no private material',
+      ),
+    },
+    '/api/v1/conversations/recovery': {
+      post: secured(
+        'Customer: synchronize the encrypted managed recovery envelope for own key',
       ),
     },
     '/api/v1/conversations/vault': {

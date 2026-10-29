@@ -27,7 +27,11 @@ export class AuthService {
       });
       return {
         user,
-        accessToken: this.tokens.sign({ sub: user.id, role: user.role }),
+        accessToken: this.tokens.sign({
+          sub: user.id,
+          role: user.role,
+          version: 0,
+        }),
         expiresIn: 900,
       };
     } catch (e) {
@@ -67,7 +71,11 @@ export class AuthService {
     void _;
     return {
       user: safe,
-      accessToken: this.tokens.sign({ sub: user.id, role: user.role }),
+      accessToken: this.tokens.sign({
+        sub: user.id,
+        role: user.role,
+        version: user.sessionVersion,
+      }),
       expiresIn: 900,
     };
   }

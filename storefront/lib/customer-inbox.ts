@@ -4,6 +4,7 @@ import {
   createInboxKey,
   unlockInboxKey,
   type KeyBackup,
+  type ContactKey,
 } from './contact-crypto';
 export interface CustomerKey {
   keyId: string;
@@ -62,17 +63,33 @@ export async function initializeCustomerInbox(
   userId: string,
   password: string,
 ) {
-  const existing = await api<KeyBackup | null>('/conversations/vault');
+  const [existing, recoveryKey] = await Promise.all([
+    api<KeyBackup | null>('/conversations/vault'),
+    api<ContactKey>('/conversations/recovery-key'),
+  ]);
   let key: CustomerKey;
-  if (existing) key = await unlockInboxKey(existing, password);
-  else {
-    const generated = await createInboxKey(password);
+  if (existing) {
+    const unlocked = await unlockInboxKey(existing, password, {
+      publicKey: recoveryKey,
+      userId,
+    });
+    await api('/conversations/recovery', {
+      method: 'POST',
+      body: JSON.stringify(unlocked.recoveryEnvelope),
+    });
+    key = unlocked;
+  } else {
+    const generated = await createInboxKey(password, {
+      publicKey: recoveryKey,
+      userId,
+    });
     await api('/conversations/key', {
       method: 'POST',
       body: JSON.stringify({
         id: generated.publicKey.id,
         publicJwk: generated.publicKey.publicJwk,
         backup: generated.backup,
+        recovery: generated.recoveryEnvelope,
       }),
     });
     key = { keyId: generated.publicKey.id, privateKey: generated.privateKey };

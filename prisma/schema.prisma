@@ -27,6 +27,8 @@ model User {
  email String @unique
  name String
  passwordHash String
+ sessionVersion Int @default(0)
+ resets PasswordReset[]
  role Role @default(CUSTOMER)
  createdAt DateTime @default(now())
  cart Cart?
@@ -228,6 +230,7 @@ model WishlistItem {
 
 model CustomerInboxKey {
  backup Json?
+ managedRecovery Json?
  id String @id @db.Uuid
  userId String @unique @db.Uuid
  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
@@ -307,4 +310,35 @@ model SavedAddress {
  updatedAt DateTime @updatedAt
  @@unique([userId,digest])
  @@index([userId,createdAt])
+}
+
+model PasswordReset {
+ id String @id @default(uuid()) @db.Uuid
+ userId String @db.Uuid
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ digest String @unique @db.VarChar(64)
+ expiresAt DateTime
+ usedAt DateTime?
+ createdAt DateTime @default(now())
+ delivery ResetEmail?
+ @@index([userId,expiresAt])
+}
+model ResetEmail {
+ id String @id @db.Uuid
+ reset PasswordReset @relation(fields:[id],references:[id],onDelete:Cascade)
+ payload Json
+ attempts Int @default(0)
+ state String @default("PENDING")
+ availableAt DateTime @default(now())
+ leaseUntil DateTime?
+ deliveredAt DateTime?
+ @@index([state,availableAt,leaseUntil])
+}
+
+model MessageRecoveryKey {
+ id String @id @db.Uuid
+ publicJwk Json
+ fingerprint String @db.VarChar(64)
+ privateBox Json
+ createdAt DateTime @default(now())
 }

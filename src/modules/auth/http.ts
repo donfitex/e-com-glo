@@ -2,6 +2,7 @@ import { Router, RequestHandler } from 'express';
 import { z } from 'zod';
 import { Tokens, Identity } from './security';
 import { AuthService } from './service';
+import type { Database } from '../../infrastructure/database';
 import { AppError } from '../../shared/errors';
 import { endpoint } from '../../shared/http';
 declare global {
@@ -18,17 +19,36 @@ const credentials = z
     password: z.string().min(12).max(128),
   })
   .strict();
-export function authenticate(tokens: Tokens): RequestHandler {
+export function authenticate(tokens: Tokens, db: Database): RequestHandler {
   return (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     try {
       const header = req.headers.authorization;
       if (!header?.startsWith('Bearer '))
         throw new AppError(401, 'UNAUTHORIZED', 'Bearer token required');
-      res.locals.identity = tokens.verify(header.slice(7));
-      next();
-    } catch (e) {
-      next(e);
+      const identity = tokens.verify(header.slice(7));
+      void db.user
+        .findUnique({
+          where: { id: identity.sub },
+          select: { sessionVersion: true, role: true },
+        })
+        .then((user) => {
+          if (
+            !user ||
+            user.sessionVersion !== (identity.version ?? 0) ||
+            user.role !== identity.role
+          )
+            throw new AppError(
+              401,
+              'UNAUTHORIZED',
+              'Session expired. Sign in again.',
+            );
+          res.locals.identity = identity;
+          next();
+        })
+        .catch(next);
+    } catch (error) {
+      next(error);
     }
   };
 }

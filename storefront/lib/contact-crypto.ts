@@ -109,7 +109,10 @@ async function backupKey(passphrase: string, salt: ArrayBuffer) {
     ['encrypt', 'decrypt'],
   );
 }
-export async function createInboxKey(passphrase: string) {
+export async function createInboxKey(
+  passphrase: string,
+  recovery?: { publicKey: ContactKey; userId: string },
+) {
   if (passphrase.length < 12 || passphrase.length > 256)
     throw new Error('Use a recovery passphrase between 12 and 256 characters');
   const pair = await crypto.subtle.generateKey(
@@ -159,11 +162,23 @@ export async function createInboxKey(passphrase: string) {
   );
   return {
     backup,
+    recoveryEnvelope: recovery
+      ? await encryptKeyRecovery(
+          privateJwk,
+          keyId,
+          recovery.userId,
+          recovery.publicKey,
+        )
+      : undefined,
     privateKey,
     publicKey: { id: keyId, publicJwk, fingerprint: fp },
   };
 }
-export async function unlockInboxKey(input: unknown, passphrase: string) {
+export async function unlockInboxKey(
+  input: unknown,
+  passphrase: string,
+  recovery?: { publicKey: ContactKey; userId: string },
+) {
   if (!input || typeof input !== 'object')
     throw new Error('Invalid recovery file');
   const backup = input as KeyBackup;
@@ -208,7 +223,19 @@ export async function unlockInboxKey(input: unknown, passphrase: string) {
     false,
     ['decrypt'],
   );
-  return { privateKey, keyId: backup.keyId, fingerprint: backup.fingerprint };
+  return {
+    privateKey,
+    keyId: backup.keyId,
+    fingerprint: backup.fingerprint,
+    recoveryEnvelope: recovery
+      ? await encryptKeyRecovery(
+          jwk,
+          backup.keyId,
+          recovery.userId,
+          recovery.publicKey,
+        )
+      : undefined,
+  };
 }
 export async function encryptContact(
   input: ContactPayload,
@@ -423,4 +450,64 @@ export async function decryptReply(
   )
     throw new Error('Invalid message content');
   return value.message;
+}
+
+export interface RecoveryEnvelope {
+  version: 3;
+  keyId: string;
+  recoveryKeyId: string;
+  userId: string;
+  iv: string;
+  wrappedKey: string;
+  ciphertext: string;
+}
+async function encryptKeyRecovery(
+  privateJwk: JsonWebKey,
+  keyId: string,
+  userId: string,
+  recipient: ContactKey,
+): Promise<RecoveryEnvelope> {
+  if ((await fingerprint(recipient.publicJwk)) !== recipient.fingerprint)
+    throw new Error('Recovery service fingerprint mismatch');
+  const secret = await crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt'],
+  );
+  const publicKey = await crypto.subtle.importKey(
+    'jwk',
+    recipient.publicJwk,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    false,
+    ['encrypt'],
+  );
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const [ciphertext, wrappedKey] = await Promise.all([
+    crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv,
+        additionalData: encoder.encode(
+          `ecom-key-recovery:v1:${userId}:${keyId}:${recipient.id}`,
+        ),
+        tagLength: 128,
+      },
+      secret,
+      encoder.encode(JSON.stringify(privateJwk)),
+    ),
+    crypto.subtle.encrypt(
+      { name: 'RSA-OAEP' },
+      publicKey,
+      await crypto.subtle.exportKey('raw', secret),
+    ),
+  ]);
+  return {
+    version: 3,
+    keyId,
+    recoveryKeyId: recipient.id,
+    userId,
+    iv: b64(iv.buffer),
+    wrappedKey: b64(wrappedKey),
+    ciphertext: b64(ciphertext),
+  };
 }

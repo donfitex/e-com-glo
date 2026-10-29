@@ -300,3 +300,7 @@ Recently viewed products retain only up to eight product IDs in this browser; th
 ### Customer conversations, announcements and delivery addresses
 
 Registered buyers can exchange private replies with the store at `/account/inbox`, using only normal account sign-in. Administrators use **Conversations** for support and **Broadcasts** for business updates/promotions (draft, preview, publish, archive, image uploads). Buyers have unread notifications and promotion preferences at `/account/updates`. Checkout can remember delivery addresses, explicitly reuse a saved location or enter a new one; `/account/addresses` manages the saved address book. See [customer experience and security details](docs/customer-experience.md).
+
+### Password recovery
+
+Sign-in includes **Forgot password?**, with single-use 30-minute email links, throttling, retryable delivery and revocation of old sessions. Store-managed recovery preserves registered customers’ private messaging history after a password reset without customer recovery files. **The recovery service can recover customer messaging keys**; see the [security and deployment details](docs/customer-experience.md#forgotten-passwords-and-managed-recovery). Configure `RESEND_API_KEY`, a verified `EMAIL_FROM` sender and the public `STOREFRONT_ORIGIN` on Render to enable transactional reset emails.

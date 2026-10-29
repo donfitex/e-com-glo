@@ -1,3 +1,6 @@
+import { ManagedMessageRecovery } from './modules/recovery/message-keys';
+import { recoveryRouter } from './modules/recovery/http';
+import { PasswordRecoveryService } from './modules/recovery/service';
 import { ConversationService } from './modules/conversations/service';
 import { conversationRouter } from './modules/conversations/http';
 import { CommunicationsService } from './modules/communications/service';
@@ -99,7 +102,7 @@ export function createApp(config: Config, deps: Dependencies) {
     '/api/v1',
     mediaRouter(
       new ProductImages(deps.db),
-      authenticate(deps.tokens),
+      authenticate(deps.tokens, deps.db),
       rateLimit(deps.limiter, 'image-upload', 20),
     ),
   );
@@ -122,13 +125,35 @@ export function createApp(config: Config, deps: Dependencies) {
     '/api/v1',
     rateLimit(deps.limiter, 'api', config.API_RATE_LIMIT_PER_MINUTE),
   );
-  const guard = authenticate(deps.tokens);
+  const guard = authenticate(deps.tokens, deps.db);
   const pricing = new PricingService();
   const catalog = new CatalogService(
     new CatalogRepository(deps.db),
     deps.db,
     deps.cache,
     config.CACHE_TTL_SECONDS,
+  );
+  app.use(
+    '/api/v1/auth',
+    recoveryRouter(
+      new PasswordRecoveryService(
+        deps.db,
+        deps.passwords,
+        config.STOREFRONT_ORIGIN,
+        config.JWT_SECRET,
+        Boolean(config.RESEND_API_KEY && config.EMAIL_FROM),
+        new ManagedMessageRecovery(
+          deps.db,
+          config.MESSAGE_RECOVERY_SECRET ?? config.JWT_SECRET,
+        ),
+      ),
+      rateLimit(deps.limiter, 'password-reset-ip', 20, 900),
+      rateLimit(deps.limiter, 'password-reset-account', 5, 900, (req) =>
+        typeof req.body?.email === 'string'
+          ? req.body.email.trim().toLowerCase().slice(0, 254)
+          : (req.ip ?? 'unknown'),
+      ),
+    ),
   );
   app.use(
     '/api/v1/auth',
@@ -274,7 +299,13 @@ export function createApp(config: Config, deps: Dependencies) {
   app.use(
     '/api/v1/conversations',
     conversationRouter(
-      new ConversationService(deps.db),
+      new ConversationService(
+        deps.db,
+        new ManagedMessageRecovery(
+          deps.db,
+          config.MESSAGE_RECOVERY_SECRET ?? config.JWT_SECRET,
+        ),
+      ),
       guard,
       rateLimit(deps.limiter, 'conversation-send', 60, 600),
     ),
