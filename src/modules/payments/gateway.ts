@@ -83,7 +83,9 @@ export class StripeGateway implements PaymentGateway {
       type:
         event.type === 'checkout.session.expired'
           ? 'expired'
-          : session.payment_status === 'paid'
+          : session.payment_status === 'paid' ||
+              (session.payment_status === 'no_payment_required' &&
+                session.amount_total === 0)
             ? 'paid'
             : 'ignored',
       orderId: session.client_reference_id ?? undefined,

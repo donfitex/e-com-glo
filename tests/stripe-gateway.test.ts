@@ -52,3 +52,26 @@ test('a completed session with an unpaid payment state is not paid', () => {
   });
   expect(gateway.verify(Buffer.from(body), sign(body)).type).toBe('ignored');
 });
+
+test('Stripe no-payment-required status confirms only a verified zero-total session', () => {
+  const body = (amount: number) =>
+    JSON.stringify({
+      id: 'evt_free',
+      livemode: false,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_free',
+          payment_status: 'no_payment_required',
+          amount_total: amount,
+          currency: 'usd',
+        },
+      },
+    });
+  const free = body(0);
+  expect(gateway.verify(Buffer.from(free), sign(free)).type).toBe('paid');
+  const nonzero = body(1);
+  expect(gateway.verify(Buffer.from(nonzero), sign(nonzero)).type).toBe(
+    'ignored',
+  );
+});
