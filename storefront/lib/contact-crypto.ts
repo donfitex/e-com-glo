@@ -285,3 +285,141 @@ export async function decryptContact(
   );
   return contactPayload(JSON.parse(new TextDecoder().decode(clear)));
 }
+
+export interface ConversationEnvelope {
+  version: 2;
+  id: string;
+  conversationId: string;
+  senderId: string;
+  customerKeyId: string;
+  adminKeyId: string;
+  iv: string;
+  ciphertext: string;
+  customerWrappedKey: string;
+  adminWrappedKey: string;
+}
+function conversationAAD(
+  e: Pick<
+    ConversationEnvelope,
+    'id' | 'conversationId' | 'senderId' | 'customerKeyId' | 'adminKeyId'
+  >,
+) {
+  return encoder.encode(
+    `ecom-conversation:v2:${e.conversationId}:${e.id}:${e.senderId}:${e.customerKeyId}:${e.adminKeyId}`,
+  );
+}
+export async function encryptReply(
+  message: string,
+  conversationId: string,
+  senderId: string,
+  customer: ContactKey,
+  admin: ContactKey,
+): Promise<ConversationEnvelope> {
+  const body = message.trim();
+  if (!body || body.length > 5000)
+    throw new Error('Write a message between 1 and 5,000 characters.');
+  if (!uuid(conversationId) || !uuid(senderId))
+    throw new Error('Invalid conversation');
+  const recipients = await Promise.all(
+    [customer, admin].map(async (k) => {
+      if (!uuid(k.id) || (await fingerprint(k.publicJwk)) !== k.fingerprint)
+        throw new Error('Recipient fingerprint mismatch');
+      return crypto.subtle.importKey(
+        'jwk',
+        k.publicJwk,
+        { name: 'RSA-OAEP', hash: 'SHA-256' },
+        false,
+        ['encrypt'],
+      );
+    }),
+  );
+  const secret = await crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt'],
+  );
+  const raw = await crypto.subtle.exportKey('raw', secret);
+  const header = {
+    version: 2 as const,
+    id: crypto.randomUUID(),
+    conversationId,
+    senderId,
+    customerKeyId: customer.id,
+    adminKeyId: admin.id,
+  };
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const [ciphertext, customerWrappedKey, adminWrappedKey] = await Promise.all([
+    crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv,
+        additionalData: conversationAAD(header),
+        tagLength: 128,
+      },
+      secret,
+      encoder.encode(JSON.stringify({ message: body })),
+    ),
+    crypto.subtle.encrypt({ name: 'RSA-OAEP' }, recipients[0]!, raw),
+    crypto.subtle.encrypt({ name: 'RSA-OAEP' }, recipients[1]!, raw),
+  ]);
+  return {
+    ...header,
+    iv: b64(iv.buffer),
+    ciphertext: b64(ciphertext),
+    customerWrappedKey: b64(customerWrappedKey),
+    adminWrappedKey: b64(adminWrappedKey),
+  };
+}
+export async function decryptReply(
+  envelope: ConversationEnvelope,
+  keyId: string,
+  privateKey: CryptoKey,
+) {
+  if (
+    envelope.version !== 2 ||
+    !uuid(envelope.id) ||
+    !uuid(envelope.conversationId) ||
+    !uuid(envelope.senderId)
+  )
+    throw new Error('Invalid encrypted message');
+  const wrapped =
+    keyId === envelope.customerKeyId
+      ? envelope.customerWrappedKey
+      : keyId === envelope.adminKeyId
+        ? envelope.adminWrappedKey
+        : null;
+  if (!wrapped)
+    throw new Error('Import the recovery key for this conversation.');
+  const raw = await crypto.subtle.decrypt(
+    { name: 'RSA-OAEP' },
+    privateKey,
+    bytes(wrapped),
+  );
+  const secret = await crypto.subtle.importKey(
+    'raw',
+    raw,
+    { name: 'AES-GCM' },
+    false,
+    ['decrypt'],
+  );
+  const clear = await crypto.subtle.decrypt(
+    {
+      name: 'AES-GCM',
+      iv: bytes(envelope.iv),
+      additionalData: conversationAAD(envelope),
+      tagLength: 128,
+    },
+    secret,
+    bytes(envelope.ciphertext),
+  );
+  const value = JSON.parse(new TextDecoder().decode(clear)) as {
+    message: unknown;
+  };
+  if (
+    typeof value.message !== 'string' ||
+    !value.message.trim() ||
+    value.message.length > 5000
+  )
+    throw new Error('Invalid message content');
+  return value.message;
+}

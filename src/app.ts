@@ -1,3 +1,9 @@
+import { ConversationService } from './modules/conversations/service';
+import { conversationRouter } from './modules/conversations/http';
+import { CommunicationsService } from './modules/communications/service';
+import { communicationsRouter } from './modules/communications/http';
+import { AddressService } from './modules/addresses/service';
+import { addressRouter } from './modules/addresses/http';
 import { WishlistService } from './modules/wishlist/service';
 import { wishlistRouter } from './modules/wishlist/http';
 import { inboxRouter } from './modules/inbox/http';
@@ -264,6 +270,22 @@ export function createApp(config: Config, deps: Dependencies) {
       guard,
       rateLimit(deps.limiter, 'contact', 20, 600),
     ),
+  );
+  app.use(
+    '/api/v1/conversations',
+    conversationRouter(
+      new ConversationService(deps.db),
+      guard,
+      rateLimit(deps.limiter, 'conversation-send', 60, 600),
+    ),
+  );
+  app.use(
+    '/api/v1/addresses',
+    addressRouter(new AddressService(deps.db), guard),
+  );
+  app.use(
+    '/api/v1',
+    communicationsRouter(new CommunicationsService(deps.db), guard),
   );
   app.use(
     '/api/v1/wishlist',

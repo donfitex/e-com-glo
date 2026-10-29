@@ -16,6 +16,13 @@ export interface Database extends Pick<
   | 'inboxKey'
   | 'supportMessage'
   | 'wishlistItem'
+  | 'customerInboxKey'
+  | 'conversation'
+  | 'conversationMessage'
+  | 'broadcast'
+  | 'broadcastReceipt'
+  | 'customerPreferences'
+  | 'savedAddress'
   | '$queryRaw'
 > {
   $transaction<T>(

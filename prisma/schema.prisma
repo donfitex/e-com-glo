@@ -32,6 +32,11 @@ model User {
  cart Cart?
  orders Order[]
  wishlist WishlistItem[]
+ inboxKey CustomerInboxKey?
+ conversations Conversation[]
+ broadcastReceipts BroadcastReceipt[]
+ preferences CustomerPreferences?
+ addresses SavedAddress[]
 }
 model Category {
  id String @id @default(uuid()) @db.Uuid
@@ -190,6 +195,7 @@ model InboxKey {
  active Boolean @default(true)
  createdAt DateTime @default(now())
  messages SupportMessage[]
+ conversations Conversation[]
 }
 enum SupportStatus {
  NEW
@@ -218,4 +224,87 @@ model WishlistItem {
  createdAt DateTime @default(now())
  @@id([userId,productId])
  @@index([userId,createdAt,productId])
+}
+
+model CustomerInboxKey {
+ backup Json?
+ id String @id @db.Uuid
+ userId String @unique @db.Uuid
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ publicJwk Json
+ fingerprint String @unique @db.VarChar(64)
+ createdAt DateTime @default(now())
+ conversations Conversation[]
+}
+model Conversation {
+ id String @id @db.Uuid
+ userId String @db.Uuid
+ user User @relation(fields:[userId],references:[id],onDelete:Restrict)
+ customerKeyId String @db.Uuid
+ customerKey CustomerInboxKey @relation(fields:[customerKeyId],references:[id],onDelete:Restrict)
+ adminKeyId String @db.Uuid
+ adminKey InboxKey @relation(fields:[adminKeyId],references:[id],onDelete:Restrict)
+ resolved Boolean @default(false)
+ sequence Int @default(0)
+ customerRead Int @default(0)
+ adminRead Int @default(0)
+ lastCustomerSequence Int @default(0)
+ lastAdminSequence Int @default(0)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @default(now())
+ messages ConversationMessage[]
+ @@index([userId,updatedAt,id])
+ @@index([updatedAt,id])
+}
+model ConversationMessage {
+ id String @id @db.Uuid
+ conversationId String @db.Uuid
+ conversation Conversation @relation(fields:[conversationId],references:[id],onDelete:Cascade)
+ senderId String @db.Uuid
+ fromAdmin Boolean
+ sequence Int
+ envelope Json
+ digest String @db.VarChar(64)
+ createdAt DateTime @default(now())
+ @@unique([conversationId,sequence])
+}
+model Broadcast {
+ id String @id @db.Uuid
+ title String @db.VarChar(160)
+ body String @db.VarChar(5000)
+ kind String
+ href String?
+ imageUrl String?
+ publishedAt DateTime?
+ archivedAt DateTime?
+ createdAt DateTime @default(now())
+ receipts BroadcastReceipt[]
+ @@index([publishedAt,id])
+}
+model BroadcastReceipt {
+ userId String @db.Uuid
+ broadcastId String @db.Uuid
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ broadcast Broadcast @relation(fields:[broadcastId],references:[id],onDelete:Cascade)
+ readAt DateTime @default(now())
+ @@id([userId,broadcastId])
+}
+model CustomerPreferences {
+ userId String @id @db.Uuid
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ promotions Boolean @default(true)
+ updatedAt DateTime @updatedAt
+}
+model SavedAddress {
+ id String @id @default(uuid()) @db.Uuid
+ userId String @db.Uuid
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ label String @db.VarChar(60)
+ address Json
+ digest String @db.VarChar(64)
+ isDefault Boolean @default(false)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@unique([userId,digest])
+ @@index([userId,createdAt])
 }

@@ -369,6 +369,110 @@ export const openapi = {
         '204',
       ),
     }),
+    '/api/v1/conversations/key': {
+      get: secured('Current participant public encryption key'),
+      post: secured(
+        'Customer: register an immutable public key and password-encrypted backup',
+        undefined,
+        '201',
+      ),
+    },
+    '/api/v1/conversations/vault': {
+      get: secured(
+        'Customer: own encrypted key backup for automatic browser sign-in sync',
+      ),
+    },
+    '/api/v1/conversations/summary': {
+      get: secured(
+        'Unread conversation count for the authenticated participant',
+      ),
+    },
+    '/api/v1/conversations': {
+      get: secured(
+        'Paginated own conversations; administrators see customer support threads',
+      ),
+      post: secured(
+        'Customer: create a support thread bound to both recipient public keys',
+        undefined,
+        '201',
+      ),
+    },
+    '/api/v1/conversations/{id}': item({
+      get: secured(
+        'Authorized encrypted history, newest 50 messages; before sequence loads earlier messages',
+      ),
+      patch: secured(
+        'Participant: resolve or reopen conversation',
+        object({ resolved: { type: 'boolean' } }),
+      ),
+    }),
+    '/api/v1/conversations/{id}/messages': item({
+      post: secured(
+        'Append a version 2 encrypted envelope; retries with same ID and bytes are idempotent',
+        undefined,
+        '201',
+      ),
+    }),
+    '/api/v1/conversations/{id}/read': item({
+      post: secured(
+        'Advance own read watermark, never beyond an existing message',
+        object({ sequence: { type: 'integer', minimum: 0 } }),
+      ),
+    }),
+    '/api/v1/announcements': {
+      get: secured(
+        'Published business messages and enabled promotions for users registered at publication',
+      ),
+    },
+    '/api/v1/announcements/summary': {
+      get: secured('Unread announcement count'),
+    },
+    '/api/v1/announcements/{id}/read': item({
+      post: secured('Mark one eligible announcement read for this account'),
+    }),
+    '/api/v1/preferences': {
+      get: secured('Customer notification preferences'),
+      patch: secured(
+        'Enable or disable inbox promotions',
+        object({ promotions: { type: 'boolean' } }),
+      ),
+    },
+    '/api/v1/admin/broadcasts': {
+      get: secured(
+        'Admin: paginated announcement drafts, publications and archives',
+      ),
+      post: secured(
+        'Admin: save or update an unpublished announcement; safe store links and uploaded image only',
+        undefined,
+        '201',
+      ),
+    },
+    '/api/v1/admin/broadcasts/{id}/publish': item({
+      post: secured(
+        'Admin: idempotently publish to registered users’ store inboxes',
+      ),
+    }),
+    '/api/v1/admin/broadcasts/{id}/archive': item({
+      post: secured('Admin: withdraw announcement from customer inboxes'),
+    }),
+    '/api/v1/addresses': {
+      get: secured('Own saved delivery addresses, default first'),
+      post: secured(
+        'Save a validated delivery address, deduplicated and capped at ten per account',
+        undefined,
+        '201',
+      ),
+    },
+    '/api/v1/addresses/{id}': item({
+      delete: secured(
+        'Remove own saved address without changing existing orders',
+        undefined,
+        '204',
+      ),
+    }),
+    '/api/v1/addresses/{id}/default': item({
+      patch: secured('Set own default delivery destination'),
+    }),
     '/api/v1/wishlist': {
       get: secured(
         'Paginated saved products belonging to the authenticated customer',

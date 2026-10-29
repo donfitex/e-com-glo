@@ -4,6 +4,8 @@ import {
   unlockInboxKey,
   encryptContact,
   decryptContact,
+  encryptReply,
+  decryptReply,
 } from '../storefront/lib/contact-crypto';
 jest.setTimeout(30000);
 Object.defineProperty(globalThis, 'crypto', {
@@ -71,5 +73,36 @@ test('recovery backup is encrypted, rejects wrong passphrases and recovers the o
   ).toEqual(payload);
   await expect(
     unlockInboxKey({ ...key.backup, fingerprint: '0'.repeat(64) }, passphrase),
+  ).rejects.toThrow();
+});
+
+test('both participants decrypt replies while thread, sender and recipient substitution fails', async () => {
+  const customer = await createInboxKey(passphrase);
+  const thread = randomUUID(),
+    sender = randomUUID();
+  const envelope = await encryptReply(
+    'Private two-way message',
+    thread,
+    sender,
+    customer.publicKey,
+    key.publicKey,
+  );
+  expect(
+    await decryptReply(envelope, customer.publicKey.id, customer.privateKey),
+  ).toBe('Private two-way message');
+  expect(await decryptReply(envelope, key.publicKey.id, key.privateKey)).toBe(
+    'Private two-way message',
+  );
+  expect(JSON.stringify(envelope)).not.toContain('Private two-way message');
+  for (const patch of [
+    { conversationId: randomUUID() },
+    { senderId: randomUUID() },
+    { customerKeyId: randomUUID() },
+  ])
+    await expect(
+      decryptReply({ ...envelope, ...patch }, key.publicKey.id, key.privateKey),
+    ).rejects.toThrow();
+  await expect(
+    decryptReply(envelope, randomUUID(), key.privateKey),
   ).rejects.toThrow();
 });

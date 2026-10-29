@@ -1,3 +1,4 @@
+import { rememberAddress } from '../addresses/service';
 import { recordOrderEvent } from '../events/outbox';
 import { deliveryWindow, ShipmentInput } from './delivery';
 import { CheckoutPolicy } from '../checkout/policy';
@@ -39,6 +40,7 @@ export class OrderService {
     key: string,
     shippingAddress: Address,
     expected?: { total: number; ruleVersion: string },
+    saveAddress = true,
   ) {
     const execute = () =>
       serializable(this.db, async (tx) => {
@@ -141,6 +143,7 @@ export class OrderService {
           },
           include: { items: true },
         });
+        if (saveAddress) await rememberAddress(tx, userId, shippingAddress);
         await recordOrderEvent(tx, order.id, 'OrderCreated');
         await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
         await tx.auditEvent.create({

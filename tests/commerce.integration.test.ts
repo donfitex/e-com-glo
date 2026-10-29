@@ -155,6 +155,9 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     await db.$connect();
   }, 20000);
   beforeEach(async () => {
+    await db.conversation.deleteMany();
+    await db.customerInboxKey.deleteMany();
+    await db.broadcast.deleteMany();
     await db.supportMessage.deleteMany();
     await db.inboxKey.deleteMany();
     await db.storeContent.deleteMany();
@@ -1295,5 +1298,315 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
         providerTransactionId: '987654',
       },
     );
+  });
+  test('two-way encrypted conversations enforce participants, ordered idempotency and unread watermarks', async () => {
+    const adminId = tokens.verify(admin).sub;
+    const keyPair = generateKeyPairSync('rsa', { modulusLength: 3072 });
+    const jwk = {
+      ...keyPair.publicKey.export({ format: 'jwk' }),
+      alg: 'RSA-OAEP-256',
+      ext: true,
+      key_ops: ['encrypt'],
+    };
+    const adminKeyId = randomUUID(),
+      customerKeyId = randomUUID(),
+      threadId = randomUUID();
+    await request(app)
+      .post('/api/v1/admin/inbox/keys')
+      .set(auth(admin))
+      .send({ id: adminKeyId, expectedCurrentId: null, publicJwk: jwk })
+      .expect(201);
+    // A second distinct customer key cannot reveal private material through the public-key endpoint.
+    const customerPair = generateKeyPairSync('rsa', { modulusLength: 3072 });
+    const publicJwk = {
+      ...customerPair.publicKey.export({ format: 'jwk' }),
+      alg: 'RSA-OAEP-256',
+      ext: true,
+      key_ops: ['encrypt'],
+    };
+    await request(app)
+      .post('/api/v1/conversations/key')
+      .set(auth(customer))
+      .send({ id: customerKeyId, publicJwk })
+      .expect(201);
+    await request(app)
+      .post('/api/v1/conversations/key')
+      .set(auth(other))
+      .send({ id: randomUUID(), publicJwk: { ...publicJwk, d: 'private' } })
+      .expect(400);
+    await request(app)
+      .post('/api/v1/conversations')
+      .set(auth(customer))
+      .send({ id: threadId, customerKeyId, adminKeyId })
+      .expect(201);
+    await request(app)
+      .get(`/api/v1/conversations/${threadId}`)
+      .set(auth(other))
+      .expect(404);
+    const envelope = {
+      version: 2,
+      id: randomUUID(),
+      conversationId: threadId,
+      senderId: customerId,
+      customerKeyId,
+      adminKeyId,
+      iv: Buffer.alloc(12).toString('base64'),
+      ciphertext: Buffer.alloc(40).toString('base64'),
+      customerWrappedKey: Buffer.alloc(384).toString('base64'),
+      adminWrappedKey: Buffer.alloc(384).toString('base64'),
+    };
+    await request(app)
+      .post(`/api/v1/conversations/${threadId}/messages`)
+      .set(auth(customer))
+      .send({ ...envelope, message: 'plaintext' })
+      .expect(400);
+    await request(app)
+      .post(`/api/v1/conversations/${threadId}/messages`)
+      .set(auth(other))
+      .send(envelope)
+      .expect(404);
+    await request(app)
+      .post(`/api/v1/conversations/${threadId}/messages`)
+      .set(auth(customer))
+      .send(envelope)
+      .expect(201);
+    await request(app)
+      .post(`/api/v1/conversations/${threadId}/messages`)
+      .set(auth(customer))
+      .send(envelope)
+      .expect(201);
+    expect(
+      await db.conversationMessage.count({
+        where: { conversationId: threadId },
+      }),
+    ).toBe(1);
+    expect(
+      (await request(app).get('/api/v1/conversations/summary').set(auth(admin)))
+        .body.data.unread,
+    ).toBe(1);
+    await request(app)
+      .post(`/api/v1/conversations/${threadId}/read`)
+      .set(auth(admin))
+      .send({ sequence: 1 })
+      .expect(200);
+    await request(app)
+      .post(`/api/v1/conversations/${threadId}/messages`)
+      .set(auth(admin))
+      .send({ ...envelope, id: randomUUID(), senderId: adminId })
+      .expect(201);
+    expect(
+      (
+        await request(app)
+          .get('/api/v1/conversations/summary')
+          .set(auth(customer))
+      ).body.data.unread,
+    ).toBe(1);
+    await request(app)
+      .post(`/api/v1/conversations/${threadId}/read`)
+      .set(auth(customer))
+      .send({ sequence: 3 })
+      .expect(400);
+    await request(app)
+      .post(`/api/v1/conversations/${threadId}/read`)
+      .set(auth(customer))
+      .send({ sequence: 2 })
+      .expect(200);
+    await request(app)
+      .post(`/api/v1/conversations/${threadId}/read`)
+      .set(auth(customer))
+      .send({ sequence: 0 })
+      .expect(200);
+    expect(
+      (
+        await request(app)
+          .get('/api/v1/conversations/summary')
+          .set(auth(customer))
+      ).body.data.unread,
+    ).toBe(0);
+    await request(app)
+      .patch(`/api/v1/conversations/${threadId}`)
+      .set(auth(customer))
+      .send({ resolved: true })
+      .expect(200);
+    await request(app)
+      .post(`/api/v1/conversations/${threadId}/messages`)
+      .set(auth(customer))
+      .send({ ...envelope, id: randomUUID() })
+      .expect(201);
+    expect(
+      (
+        await request(app)
+          .get(`/api/v1/conversations/${threadId}`)
+          .set(auth(customer))
+      ).body.data.thread.resolved,
+    ).toBe(false);
+    await request(app)
+      .post(`/api/v1/conversations/${threadId}/messages`)
+      .set(auth(admin))
+      .send({ ...envelope, id: randomUUID(), senderId: customerId })
+      .expect(400);
+  });
+  test('announcements publish once, preserve drafts, respect recipients and promotion preferences', async () => {
+    const id = randomUUID();
+    const input = {
+      id,
+      title: 'Delivery update',
+      body: 'A useful store update.',
+      kind: 'BUSINESS',
+      href: '/shop',
+      imageUrl: null,
+    };
+    await request(app)
+      .post('/api/v1/admin/broadcasts')
+      .set(auth(customer))
+      .send(input)
+      .expect(403);
+    await request(app)
+      .post('/api/v1/admin/broadcasts')
+      .set(auth(admin))
+      .send({ ...input, href: 'https://evil.example' })
+      .expect(400);
+    await request(app)
+      .post('/api/v1/admin/broadcasts')
+      .set(auth(admin))
+      .send(input)
+      .expect(201);
+    expect(
+      (await request(app).get('/api/v1/announcements').set(auth(customer))).body
+        .data.total,
+    ).toBe(0);
+    await request(app)
+      .post(`/api/v1/admin/broadcasts/${id}/publish`)
+      .set(auth(admin))
+      .send({})
+      .expect(200);
+    const published = (await db.broadcast.findUniqueOrThrow({ where: { id } }))
+      .publishedAt;
+    await request(app)
+      .post(`/api/v1/admin/broadcasts/${id}/publish`)
+      .set(auth(admin))
+      .send({})
+      .expect(200);
+    expect(
+      (await db.broadcast.findUniqueOrThrow({ where: { id } })).publishedAt,
+    ).toEqual(published);
+    expect(
+      (
+        await request(app)
+          .get('/api/v1/announcements/summary')
+          .set(auth(customer))
+      ).body.data.unread,
+    ).toBe(1);
+    await request(app)
+      .post(`/api/v1/announcements/${id}/read`)
+      .set(auth(customer))
+      .send({})
+      .expect(200);
+    expect(
+      (await request(app).get('/api/v1/announcements/summary').set(auth(other)))
+        .body.data.unread,
+    ).toBe(1);
+    await request(app)
+      .post('/api/v1/admin/broadcasts')
+      .set(auth(admin))
+      .send({ ...input, title: 'Changed' })
+      .expect(409);
+    const promotion = randomUUID();
+    await request(app)
+      .post('/api/v1/admin/broadcasts')
+      .set(auth(admin))
+      .send({ ...input, id: promotion, kind: 'PROMOTION' })
+      .expect(201);
+    await request(app)
+      .post(`/api/v1/admin/broadcasts/${promotion}/publish`)
+      .set(auth(admin))
+      .send({})
+      .expect(200);
+    await request(app)
+      .patch('/api/v1/preferences')
+      .set(auth(customer))
+      .send({ promotions: false })
+      .expect(200);
+    expect(
+      (await request(app).get('/api/v1/announcements').set(auth(customer))).body
+        .data.total,
+    ).toBe(1);
+    await request(app)
+      .post(`/api/v1/announcements/${promotion}/read`)
+      .set(auth(customer))
+      .send({})
+      .expect(404);
+    await request(app)
+      .post(`/api/v1/admin/broadcasts/${id}/archive`)
+      .set(auth(admin))
+      .send({})
+      .expect(200);
+    expect(
+      (await request(app).get('/api/v1/announcements').set(auth(customer))).body
+        .data.total,
+    ).toBe(0);
+  });
+  test('saved delivery addresses deduplicate, isolate owners and retain order address snapshots', async () => {
+    const saved = (
+      await request(app)
+        .post('/api/v1/addresses')
+        .set(auth(customer))
+        .send({ label: 'Home', address: shippingAddress })
+        .expect(201)
+    ).body.data;
+    await request(app)
+      .post('/api/v1/addresses')
+      .set(auth(customer))
+      .send({ label: 'Again', address: shippingAddress })
+      .expect(201);
+    expect(
+      (await request(app).get('/api/v1/addresses').set(auth(customer))).body
+        .data,
+    ).toHaveLength(1);
+    await request(app)
+      .delete(`/api/v1/addresses/${saved.id}`)
+      .set(auth(other))
+      .expect(404);
+    await request(app)
+      .patch(`/api/v1/addresses/${saved.id}/default`)
+      .set(auth(other))
+      .send({})
+      .expect(404);
+    await request(app)
+      .post('/api/v1/cart/items')
+      .set(auth(customer))
+      .send({ productId, quantity: 1 })
+      .expect(200);
+    const order = (
+      await request(app)
+        .post('/api/v1/orders/checkout')
+        .set(auth(customer))
+        .set('Idempotency-Key', randomUUID())
+        .send({ shippingAddress, saveAddress: false })
+        .expect(201)
+    ).body.data;
+    await request(app)
+      .delete(`/api/v1/addresses/${saved.id}`)
+      .set(auth(customer))
+      .expect(204);
+    expect(
+      (await db.order.findUniqueOrThrow({ where: { id: order.id } }))
+        .shippingAddress,
+    ).toMatchObject(shippingAddress);
+    await request(app)
+      .post('/api/v1/cart/items')
+      .set(auth(customer))
+      .send({ productId, quantity: 1 })
+      .expect(200);
+    await request(app)
+      .post('/api/v1/orders/checkout')
+      .set(auth(customer))
+      .set('Idempotency-Key', randomUUID())
+      .send({ shippingAddress })
+      .expect(201);
+    expect(
+      (await request(app).get('/api/v1/addresses').set(auth(customer))).body
+        .data,
+    ).toHaveLength(1);
   });
 });

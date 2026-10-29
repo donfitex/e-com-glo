@@ -36,6 +36,7 @@ export function orderRouter(service: OrderService, guard: RequestHandler) {
       const body = z
         .object({
           shippingAddress: address,
+          saveAddress: z.boolean().default(true),
           quote: z
             .object({
               total: z.number().int().nonnegative(),
@@ -52,6 +53,7 @@ export function orderRouter(service: OrderService, guard: RequestHandler) {
           key,
           body.shippingAddress,
           body.quote,
+          body.saveAddress,
         ),
       });
     }),
