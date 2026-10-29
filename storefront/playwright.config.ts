@@ -1,6 +1,42 @@
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
+  webServer: process.env.CI
+    ? [
+        {
+          command: 'node ../dist/index.js',
+          url: 'http://127.0.0.1:3000/ready',
+          timeout: 60000,
+          reuseExistingServer: false,
+          env: {
+            DATABASE_URL: process.env.E2E_DATABASE_URL!,
+            REDIS_URL: 'redis://localhost:6379/14',
+            JWT_SECRET: 'browser-ci-test-only-secret-at-least-32-characters',
+            CORS_ORIGINS: 'http://localhost:3001',
+            CHECKOUT_RULES_JSON: JSON.stringify([
+              {
+                country: 'US',
+                currency: 'USD',
+                shipping: 700,
+                taxBasisPoints: 0,
+              },
+            ]),
+            PORT: '3000',
+          },
+        },
+        {
+          command: 'npm run dev',
+          url: 'http://localhost:3001',
+          timeout: 60000,
+          reuseExistingServer: false,
+          env: {
+            COMMERCE_API_URL: 'http://127.0.0.1:3000',
+            STOREFRONT_ORIGIN: 'http://localhost:3001',
+            NEXT_TELEMETRY_DISABLED: '1',
+          },
+        },
+      ]
+    : undefined,
   fullyParallel: false,
   workers: 1,
   retries: 0,

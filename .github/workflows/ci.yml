@@ -20,6 +20,7 @@ jobs:
       DATABASE_URL: postgresql://ecom:ci-test-only@localhost:5432/ecom_test
       TEST_DATABASE_URL: postgresql://ecom:ci-test-only@localhost:5432/ecom_test
       TEST_VECTOR_URL: postgresql://ecom:ci-test-only@localhost:5432/ecom_test
+      E2E_DATABASE_URL: postgresql://ecom:ci-test-only@localhost:5432/ecom_browser_test
       TEST_REDIS_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v4
@@ -33,4 +34,18 @@ jobs:
       - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/search-index.sql
       - run: npm run format:check
       - run: npm run check
+      - run: npm --prefix storefront ci
+      - run: npm run web:typecheck
+      - run: npm run web:build
+      - run: npx playwright install --with-deps chromium
+        working-directory: storefront
+      - name: Prepare isolated browser database
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ecom_browser_test'
+          DATABASE_URL="$E2E_DATABASE_URL" npm run prisma:migrate
+          DATABASE_URL="$E2E_DATABASE_URL" npm run db:seed
+          DATABASE_URL="$E2E_DATABASE_URL" ALLOW_DEMO_SEED=true npm run db:seed:demo
+      - run: npm run web:test:e2e
       - run: docker build -t e-com-global:ci .
+
+      - run: docker build -f Dockerfile.staging -t e-com-global:staging-ci .

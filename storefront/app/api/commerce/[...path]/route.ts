@@ -1,3 +1,4 @@
+import { limitedBody, BodyTooLarge } from '@/lib/request-body';
 import { NextRequest, NextResponse } from 'next/server';
 import { apiOrigin } from '@/lib/server-api';
 export const runtime = 'nodejs';
@@ -41,8 +42,8 @@ async function proxy(
   const key = req.headers.get('idempotency-key');
   if (key) headers['Idempotency-Key'] = key;
   try {
-    const body = req.method === 'GET' ? undefined : await req.text();
-    if (body && Buffer.byteLength(body) > 65536)
+    const body = req.method === 'GET' ? undefined : await limitedBody(req);
+    if (body && body.byteLength > 65536)
       return NextResponse.json(
         { error: { message: 'Request exceeds size limit' } },
         { status: 413 },
@@ -81,7 +82,17 @@ async function proxy(
     const retry = upstream.headers.get('retry-after');
     if (retry) res.headers.set('Retry-After', retry);
     return res;
-  } catch {
+  } catch (error) {
+    if (error instanceof BodyTooLarge)
+      return NextResponse.json(
+        {
+          error: {
+            code: 'PAYLOAD_TOO_LARGE',
+            message: 'Request exceeds size limit',
+          },
+        },
+        { status: 413 },
+      );
     return NextResponse.json(
       {
         error: {

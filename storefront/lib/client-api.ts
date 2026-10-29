@@ -22,7 +22,9 @@ export async function api<T>(
     throw new ApiError(
       response.status,
       payload.error?.code ?? 'REQUEST_FAILED',
-      payload.error?.message ?? 'Please try again.',
+      payload.error?.details?.length
+        ? `${payload.error.message}: ${payload.error.details[0].path} ${payload.error.details[0].message}`
+        : (payload.error?.message ?? 'Please try again.'),
     );
   return payload.data as T;
 }

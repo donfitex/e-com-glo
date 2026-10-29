@@ -167,3 +167,20 @@ test('BFF rejects cross-origin writes without exposing tokens', async ({
   expect(response.status()).toBe(403);
   expect((await response.json()).error.code).toBe('CSRF_REJECTED');
 });
+
+test('proxy bounds request bodies and the raw payment endpoint rejects unsigned notifications', async ({
+  request,
+  baseURL,
+}) => {
+  const oversized = await request.post('/api/commerce/auth/login', {
+    headers: { origin: new URL(baseURL!).origin },
+    data: { email: 'boundary@example.com', password: 'x'.repeat(70000) },
+  });
+  expect(oversized.status()).toBe(413);
+  const webhook = await request.post('/api/payments/stripe/webhook', {
+    data: { id: 'unsigned-test-event' },
+  });
+  expect(webhook.status()).toBe(400);
+  const disallowed = await request.get('/api/commerce/internal-configuration');
+  expect(disallowed.status()).toBe(404);
+});

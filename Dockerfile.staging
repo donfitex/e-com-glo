@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1
+FROM node:22-bookworm-slim AS build
+WORKDIR /app
+COPY . .
+# Assemble the runtime tree in one layer to limit snapshot storage on small builders.
+RUN --mount=type=secret,id=proxy_ca set -eu; \
+    apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/* && \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm ci && npx prisma generate && npm run build && \
+    npm --prefix storefront ci && NEXT_TELEMETRY_DISABLED=1 npm run web:build && \
+    mkdir -p /runtime/storefront && cp -a node_modules dist src prisma package.json package-lock.json scripts /runtime/ && \
+    cp -a storefront/.next/standalone/. /runtime/storefront/ && \
+    cp -a storefront/.next/static /runtime/storefront/.next/static && \
+    cp -a storefront/public /runtime/storefront/public
+FROM node:22-bookworm-slim AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+ENV NODE_ENV=production PORT=10000 NEXT_TELEMETRY_DISABLED=1
+# Single-replica staging retains migration and seed tools for startup initialization.
+COPY --from=build --chown=node:node /runtime/ ./
+USER node
+EXPOSE 10000
+HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node","scripts/start-staging.mjs"]

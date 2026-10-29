@@ -16,7 +16,7 @@ export default function Policies() {
         Payments are collected through Stripe Checkout when the store’s payment
         service is configured. Orders remain unpaid until a verified payment
         notification is received. Unpaid pending orders expire after the
-        configured reservation period; stock is then released. Contact the store
+        one-hour reservation period; stock is then released. Contact the store
         operator for paid-order cancellations and refunds.
       </p>
       <h2>Currency</h2>

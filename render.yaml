@@ -1,0 +1,42 @@
+# Staging Blueprint. Render Dashboard must validate and apply this configuration.
+# All services use free plans; confirm availability/limits in the Dashboard.
+services:
+  - type: web
+    name: e-com-global-staging
+    runtime: docker
+    plan: free
+    branch: main
+    region: oregon
+    dockerfilePath: ./Dockerfile.staging
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: e-com-global-staging-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: e-com-global-staging-cache
+          property: connectionString
+      - key: CHECKOUT_RULES_JSON
+        sync: false
+      - key: ALLOW_DEMO_SEED
+        value: 'false'
+  - type: keyvalue
+    name: e-com-global-staging-cache
+    plan: free
+    region: oregon
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+databases:
+  - name: e-com-global-staging-db
+    plan: free
+    region: oregon
+    databaseName: ecom_staging
+    user: ecom
+    ipAllowList: []

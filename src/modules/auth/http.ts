@@ -20,6 +20,7 @@ const credentials = z
   .strict();
 export function authenticate(tokens: Tokens): RequestHandler {
   return (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
     try {
       const header = req.headers.authorization;
       if (!header?.startsWith('Bearer '))
@@ -41,6 +42,10 @@ export function authRouter(
   limit: RequestHandler,
 ) {
   const router = Router();
+  router.use((_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
   router.post(
     '/register',
     limit,

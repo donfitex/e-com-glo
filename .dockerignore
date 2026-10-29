@@ -7,3 +7,8 @@ dist
 coverage
 work
 attachments
+storefront/node_modules
+storefront/.next
+storefront/test-results
+storefront/playwright-report
+storefront/tsconfig.tsbuildinfo

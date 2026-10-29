@@ -1,6 +1,6 @@
 # E-com Global
 
-A modular, multi-category e-commerce **backend API** built with Node.js 22, Express, strict TypeScript, PostgreSQL/Prisma and Redis. Supports electronics, fashion, home, beauty, sports, books, groceries and toys, with category-neutral product attributes.
+A modular, multi-category e-commerce application with a **Next.js storefront and Express API** built with Node.js 22, Express, strict TypeScript, PostgreSQL/Prisma and Redis. Supports electronics, fashion, home, beauty, sports, books, groceries and toys, with category-neutral product attributes.
 
 ## Quick start
 
@@ -17,7 +17,24 @@ npm run db:seed
 npm run dev
 ```
 
-The API listens on port 3000. `GET /health` checks the process; `GET /ready` checks PostgreSQL and Redis. `.env` is ignored by Git. The supplied database password is for local development only.
+The API listens on port 3000. In another terminal, start the storefront:
+
+```sh
+npm --prefix storefront ci
+cp storefront/.env.example storefront/.env.local
+npm run web:dev
+```
+
+Open **http://localhost:3001**. The optional sample catalog uses original local illustrations and is seeded explicitly with `ALLOW_DEMO_SEED=true npm run db:seed:demo` after `npm run db:seed`. Demo seeding is idempotent and never overwrites existing product prices or inventory.
+
+Configure `CHECKOUT_RULES_JSON` in the root `.env` before testing checkout. Its default empty array rejects every destination. For example, this **development-only** rule charges USD 7.00 shipping and no tax; replace it with your merchant-approved policy:
+
+```dotenv
+CHECKOUT_RULES_JSON=[{"country":"US","currency":"USD","shipping":700,"taxBasisPoints":0}]
+STOREFRONT_ORIGIN=http://localhost:3001
+```
+
+`GET /health` checks the process; `GET /ready` checks PostgreSQL and Redis. `.env` is ignored by Git. The supplied database password is for local development only.
 
 Provision an administrator with `npm run admin:create`, supplying `ADMIN_EMAIL`, `ADMIN_NAME`, and `ADMIN_PASSWORD` through your environment or secret manager. There is deliberately no default account. Public registration always creates a customer.
 
@@ -37,7 +54,7 @@ HTTP routes / validation / authentication
 
 Modules own identity, catalog, cart and orders. The composition root (`createApp`) injects database, cache, rate limiter, password hasher, token signer, logger and readiness probes. Services implement business rules; handlers translate HTTP input/output. `Database`, `Cache`, `RateLimiter`, `PasswordHasher`, `Tokens` and `CatalogReader` define narrow contracts. `index.ts` owns connections and graceful shutdown; importing the app never opens a listener.
 
-Checkout uses a serializable PostgreSQL transaction with bounded retries for serialization/deadlock conflicts, conditional stock decrements, immutable item snapshots and atomic cart clearing. Unique per-customer idempotency keys make retries safe; reusing a key with a different address returns 409. Cancellation follows controlled transitions and restores inventory once in the same audited transaction. Check constraints enforce nonnegative money/stock and valid item quantities.
+Checkout uses a serializable PostgreSQL transaction with bounded retries for serialization/deadlock conflicts, conditional stock decrements, immutable item snapshots and atomic cart clearing. Unique per-customer idempotency keys make retries safe; reusing a key with a different address returns 409. Unpaid cancellation follows controlled transitions and restores inventory once in the same audited transaction. Paid orders cannot be cancelled through a status shortcut. Check constraints enforce nonnegative money/stock and valid item quantities.
 
 Money is stored in integer **minor units**: USD 1999 means $19.99; JPY 1999 means ¥1999. Supported currencies: USD, EUR, GBP, NGN, CAD, AUD, JPY and INR. A cart/order has one currency; prices are never automatically converted. Currency is immutable per SKU. Addresses use ISO-style two-letter uppercase country codes; this validates format, not delivery eligibility. Pagination is bounded to 100 rows and carts to 100 distinct products. A product may carry arbitrary string attributes such as size, material or brand; variant-specific inventory should use distinct SKUs.
 
@@ -65,6 +82,10 @@ All business routes are under `/api/v1`. Successful responses use `{ "data": ...
 | PATCH  | `/cart/items/:id`          | Set quantity; id is product UUID                                                              |
 | DELETE | `/cart/items/:id`          | Remove item                                                                                   |
 | DELETE | `/cart`                    | Clear cart                                                                                    |
+| POST   | `/orders/quote`            | Authenticated destination-aware quote from shippingAddress                                    |
+| POST   | `/orders/:id/payment`      | Current customer: create/reuse Stripe test Checkout session                                   |
+| POST   | `/payments/stripe/webhook` | Public raw-body endpoint, verified Stripe signature required                                  |
+| GET    | `/admin/products`          | Admin: all products, including inactive products                                              |
 | GET    | `/orders/preview`          | Current authoritative cart quote                                                              |
 | POST   | `/orders/checkout`         | Checkout with shippingAddress and Idempotency-Key header                                      |
 | GET    | `/orders`                  | Current customer's paginated history                                                          |
@@ -88,7 +109,7 @@ Example checkout body (prices and totals are deliberately rejected):
 }
 ```
 
-Send a unique `Idempotency-Key` of 8–100 letters, digits, underscores or hyphens and retain it for retries. Replaying a key returns its original order. Order transitions are `PENDING → CONFIRMED → SHIPPED → DELIVERED`; pending/confirmed orders may become `CANCELLED`. Terminal statuses cannot transition further.
+Send a unique `Idempotency-Key` of 8–100 letters, digits, underscores or hyphens and retain it for retries. Replaying a key returns its original order. A verified paid Stripe notification moves `PENDING → CONFIRMED`; administrators can then move `CONFIRMED → SHIPPED → DELIVERED`. Unpaid pending orders may be cancelled. Paid cancellations require a separate verified refund process. Terminal statuses cannot transition further.
 
 ## Verification
 
@@ -111,7 +132,7 @@ Tests intentionally delete data in the selected test database and flush the Redi
 
 `docker compose up -d postgres redis` provides local infrastructure. Apply migrations before starting the app image with `npm run prisma:migrate`; the runtime image intentionally excludes migration tooling. Then `docker compose up -d --build api`. In a proxy-managed environment, use `docker build --secret id=proxy_ca,src="$CODEX_PROXY_CERT" -t e-com-global .` to pass the session CA without baking it into an image. Standard environments need no build secret.
 
-CI runs lint, formatting, typecheck, real PostgreSQL/Redis tests, build and Docker image validation. No hosting deployment is configured; production credentials and a hosting target are required. The Docker runtime is non-root and shuts down within 10 seconds after SIGTERM/SIGINT.
+CI runs lint, formatting, typecheck, real PostgreSQL/Redis tests, build and Docker image validation. A staging container and Render Blueprint are provided; deployment requires applying the Blueprint and configuring merchant/payment secrets. The Docker runtime is non-root and shuts down within 10 seconds after SIGTERM/SIGINT.
 
 Security headers, a 64 KB payload limit, strict write schemas, allowlisted CORS origins and centralized redacted errors apply globally. Rate limits use atomic Redis counters (120 API requests, 10 authentication requests, 30 searches per minute per source IP). Rate limiting fails closed with 503 when Redis is unavailable. Catalog cache failures fall back to PostgreSQL; TTL is 30 seconds. Writes advance a cache-generation token; in-flight old reads cannot repopulate the current generation. A failed invalidation may leave stale public reads for up to the TTL; checkout always reads PostgreSQL directly.
 
@@ -121,7 +142,7 @@ Use managed database backups and point-in-time recovery; rehearse restore proced
 
 ## Scope and extension points
 
-This implementation creates **pending orders**, not paid transactions. Payment provider integration, signed webhooks, refund accounting, tax calculation, shipping rates, FX conversion, stock-reservation expiry, a browser storefront, and hosting deployment require separate integrations. Totals currently equal the merchandise subtotal. Do not enable real paid checkout until those commercial policies are implemented. The attached plan is a reference roadmap; the project name and category scope follow the user's E-com Global requirements.
+The storefront and API support **Stripe test-mode** checkout, signed payment notifications, destination-based shipping/tax rules and expiring stock reservations. Live Stripe keys are intentionally rejected. Refund execution, automated jurisdiction-aware tax services, live carrier quotes, FX conversion and merchant legal/support policies remain separate integrations. The shipping/tax engine is explicit merchant configuration, not a tax-compliance service. Hosting configuration is provided below; a Blueprint file alone is not a live deployment.
 
 ## Optional local semantic discovery
 
@@ -140,3 +161,59 @@ npm run search:index
 The reindex command processes active products in batches of 100, storing model identity and the source text alongside 384-dimensional vectors. Run it after product text changes and when adding products. Changing models requires coordinated service/index changes and a complete reindex. The semantic reader excludes stale text snapshots and inactive products, applies catalog filters and a 0.35 cosine-similarity threshold, and returns relevance order. Explicit price/name sorts use normal catalog search. HNSW provides a vector index; benchmark selective category/filter workloads before scaling it.
 
 Missing vectors, unavailable models, missing pgvector, timeouts, or no relevant matches fall back to normal text search. The embedding request timeout is two seconds. Semantic and text modes are reported in the response metadata. Keep the embedding service private; it has no public authentication layer. Its model execution requires a separately provisioned model artifact; the unit tests exercise provider selection and outage fallback without downloading a model.
+
+## Storefront and session boundary
+
+`storefront/` is a separate, locked Next.js 16 / React 19 project. Public catalog pages render on the server; account, cart, checkout and admin interactions use a same-origin backend-for-frontend under `/api/commerce`. Successful sign-in stores the API access token in an HTTP-only, SameSite=Lax cookie, secure in production, and strips it from the browser response. Tokens are never stored in localStorage. Mutations require an exact matching Origin; set `STOREFRONT_ORIGIN` to the deployed HTTPS origin, without a trailing slash. `COMMERCE_API_URL` is server-only and points to the API, not the storefront. Expired sessions require sign-in again.
+
+The storefront includes a responsive homepage, category/currency filters, text/optional semantic search, product pages, cart quantity/removal, address quotes, checkout, payment handoff, paginated order history and admin category/product/inventory/order tools. API authorization remains authoritative. The sample illustrations are bundled SVGs; they do not represent real supplier photography or product reviews.
+
+## Shipping, tax and Stripe test setup
+
+Each `CHECKOUT_RULES_JSON` entry supplies `country`, `currency`, `shipping` in minor units and `taxBasisPoints` (750 = 7.5%). Optional `freeShippingAbove` makes delivery free at or above that merchandise subtotal. Tax is exclusive and applies to merchandise only, rounded once per order; shipping is not taxed by this policy. Duplicate destination/currency rules are rejected. Unsupported destinations fail with 422. The storefront sends the quoted total and rule version; checkout recomputes both and rejects changed quotes rather than charging silently changed totals.
+
+Configure these values directly in the API host's secret manager:
+
+- `STRIPE_SECRET_KEY`: a Stripe **test** secret key (`sk_test_…`).
+- `STRIPE_WEBHOOK_SECRET`: signing secret for the test webhook endpoint.
+- `STOREFRONT_ORIGIN`: the exact storefront HTTPS origin.
+
+For a separately hosted API, register `/api/v1/payments/stripe/webhook` on its public origin. The combined staging container exposes that endpoint at **`/api/payments/stripe/webhook`** on the storefront origin. Subscribe to `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `checkout.session.expired` in Stripe's test/sandbox mode. Forwarding preserves the raw body and Stripe signature.
+
+Checkout creates an unpaid pending order and reserves its inventory for one hour. New Stripe sessions can be started during the first 30 minutes (Stripe requires at least 30 minutes until session expiration). Creating a session is idempotent per order. A return URL never confirms payment: verified, deduplicated notifications must match the stored amount, currency and session. A notification after inventory was released sets `REFUND_REQUIRED` and does not fulfill the order. Paid-order refunds need the separate refund workflow.
+
+The running API expires unpaid reservations in batches of 100 once per minute, with transactional protection across instances. A paused/free-tier service cannot sweep while asleep; overdue reservations are processed after it wakes. Stripe checkout remains unavailable with a clear 503 response until both secrets are configured. Local tests verify authentic Stripe signatures and simulated provider events; they do not charge a card or claim live Stripe integration verification.
+
+## Browser verification
+
+```sh
+npm run web:typecheck
+npm run web:build
+```
+
+Browser tests require an isolated `_test` database, migrated and seeded with the demo catalog, and the API/storefront pointed to that same database. The test API needs the development US/USD rule shown above. Tests create test accounts, orders and catalog records. They must never run against customer databases.
+
+```sh
+# With the API on :3000 and storefront on :3001 already running:
+E2E_DATABASE_URL=postgresql://ecom:local-development-only@localhost:5432/ecom_e2e_test npm run web:test:e2e
+# Optional: use an installed Chromium instead of Playwright's downloaded browser.
+CHROMIUM_PATH=/usr/bin/chromium E2E_DATABASE_URL=postgresql://ecom:local-development-only@localhost:5432/ecom_e2e_test npm run web:test:e2e
+```
+
+CI prepares an isolated browser database, installs Chromium, starts the API and storefront, and exercises registration, purchase discovery, cart, quotes, unpaid-order creation, missing-payment configuration, order ownership, mobile navigation, admin inventory changes and CSRF rejection. It also runs the PostgreSQL/Redis/pgvector tests, both TypeScript builds and both Docker builds.
+
+## Staging deployment
+
+`Dockerfile.staging` combines the Next.js standalone server and API in a single non-root container. The API listens on loopback-targeted port 3010 for the storefront; Next.js listens on the host's `PORT` (default 10000). `/api/health` checks API/database/Redis readiness. The launcher handles child shutdown, applies committed migrations and seeds categories. Demo products require `ALLOW_DEMO_SEED=true`. This bootstrap is intended for **one staging replica**; production should run migrations as a separate release job and scale the API and storefront independently.
+
+`render.yaml` proposes one free Docker web service plus PostgreSQL and Redis-compatible Key Value in Oregon. The web process derives its public origin from Render's `RENDER_EXTERNAL_URL`. Private datastore connection values use Blueprint references; no connection secrets are committed. Free-plan availability and retention limits must be checked in the target workspace.
+
+Deploy from the committed `main` branch using:
+
+**https://dashboard.render.com/blueprint/new?repo=https://github.com/donfitex/e-com-glo**
+
+Review the services and plan availability, enter the merchant-approved `CHECKOUT_RULES_JSON`, and Apply the Blueprint. This configuration is a deployment draft until Render validates it: the execution environment blocked current Render documentation/schema retrieval, and CLI platform validation requires a confirmed workspace and CLI authentication. No cloud resources are created merely by committing these files.
+
+After deployment, configure Stripe test secrets in the web service's secret settings and register the webhook URL above. To provision the first administrator without a shared default account, configure `ADMIN_EMAIL`, `ADMIN_NAME`, and a strong `ADMIN_PASSWORD` in the staging secret settings, redeploy once, then remove the provisioning values. Restarts do not reset an existing administrator's password or promote an existing customer account. Never commit these values or put them in browser-visible variables.
+
+For a local staging-image check, build with `docker build -f Dockerfile.staging -t e-com-global:staging .` and supply `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `CHECKOUT_RULES_JSON` and `STOREFRONT_ORIGIN` through an ignored env file or the container host's secret settings. In a managed proxy environment, add `--secret id=proxy_ca,src="$CODEX_PROXY_CERT"`. Verify `/api/health`, register a test customer, and exercise checkout before considering the staging deployment healthy.
