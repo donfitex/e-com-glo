@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useSession } from './session';
+import { ThemeToggle } from './theme-toggle';
 export function Header() {
   const { user, count } = useSession();
   const [menu, setMenu] = useState(false);
@@ -41,6 +42,7 @@ export function Header() {
             <button type="submit">Search</button>
           </form>
           <div className="header-actions">
+            <ThemeToggle />
             <Link className="account-link" href={user ? '/account' : '/login'}>
               <UserRound size={21} />
               <span>{user ? user.name.split(' ')[0] : 'Sign in'}</span>
