@@ -23,7 +23,8 @@
     "web:build": "npm --prefix storefront run build",
     "web:typecheck": "npm --prefix storefront run typecheck",
     "web:test:e2e": "npm --prefix storefront run test:e2e",
-    "db:seed:demo": "tsx scripts/seed-demo.ts"
+    "db:seed:demo": "tsx scripts/seed-demo.ts",
+    "learn:http": "tsx src/learning/native-server.ts"
   },
   "dependencies": {
     "@neon/config": "^1.9.5",

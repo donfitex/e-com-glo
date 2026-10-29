@@ -20,3 +20,7 @@ Each implementation checkpoint is verified and pushed to `main` before the next 
 ## Design boundaries
 
 Learning examples bind only to loopback and are never mounted in the live commerce API. All commerce writes retain authentication and authorization. Infrastructure configuration is supplied through the host secret manager. Local tests and benchmarks must use isolated databases, never Neon production. Render’s single-replica staging startup migration remains distinct from the documented production release-job procedure.
+
+## Stage 1: isolated native HTTP exercise
+
+Run `npm run learn:http`, then `curl -i http://127.0.0.1:3101/`, `curl -i http://127.0.0.1:3101/api/users`, and `curl -i http://127.0.0.1:3101/api/health`. The built-in HTTP server returns JSON, 200/404 status, process uptime, OS platform and an ISO timestamp. Stop with Ctrl+C. It binds only to loopback and refuses production mode; mock users are static examples, not commerce accounts.
