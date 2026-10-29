@@ -161,3 +161,4 @@ storefront/next-env.d.ts
 storefront/tsconfig.tsbuildinfo
 storefront/playwright-report/
 storefront/test-results/
+.neon

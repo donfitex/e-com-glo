@@ -26,6 +26,8 @@
     "db:seed:demo": "tsx scripts/seed-demo.ts"
   },
   "dependencies": {
+    "@neon/config": "^1.9.5",
+    "@neon/env": "^1.6.6",
     "@prisma/client": "^5.10.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.9",

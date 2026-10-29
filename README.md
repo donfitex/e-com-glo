@@ -201,6 +201,21 @@ CHROMIUM_PATH=/usr/bin/chromium E2E_DATABASE_URL=postgresql://ecom:local-develop
 
 CI prepares an isolated browser database, installs Chromium, starts the API and storefront, and exercises registration, purchase discovery, cart, quotes, unpaid-order creation, missing-payment configuration, order ownership, mobile navigation, admin inventory changes and CSRF rejection. It also runs the PostgreSQL/Redis/pgvector tests, both TypeScript builds and both Docker builds.
 
+## Neon project setup
+
+The repository includes `neon.ts` for PostgreSQL only. Prisma remains the database client for the long-running Node API; authentication remains in the application. The local `.neon` project link and all environment files are ignored by Git.
+
+```bash
+npm i -g neon@latest
+neon login
+neon init -y --org-id org-steep-field-51623490 --project-id twilight-silence-41750490 --branch production --services postgres
+neon deploy
+```
+
+Complete browser sign-in when prompted. Deployment retrieves the existing database connection settings into `.env` (or `.env.local` when `.env` does not exist). This repository uses dotenv's `.env` loading by default: if the CLI writes `.env.local`, start commands with `DOTENV_CONFIG_PATH=.env.local`. Preserve the other required API settings, including Redis and JWT configuration. Never commit or paste connection secrets.
+
+Use pooled `DATABASE_URL` for the API and direct `DATABASE_URL_UNPOOLED` for migrations. The staging launcher selects the direct URL for `prisma migrate deploy` automatically. For manual migrations, inject the direct URL as `DATABASE_URL` through your secret manager or shell environment. `neon deploy` provisions Neon configuration; it does not replace Prisma migrations or deploy the frontend/API to Render.
+
 ## Staging deployment
 
 `Dockerfile.staging` combines the Next.js standalone server and API in a single non-root container. The API listens on loopback-targeted port 3010 for the storefront; Next.js listens on the host's `PORT` (default 10000). `/api/health` checks API/database/Redis readiness. The launcher handles child shutdown, applies committed migrations and seeds categories. Demo products require `ALLOW_DEMO_SEED=true`. This bootstrap is intended for **one staging replica**; production should run migrations as a separate release job and scale the API and storefront independently.
