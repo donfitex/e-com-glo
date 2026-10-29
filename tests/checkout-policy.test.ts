@@ -41,3 +41,22 @@ test('configured payment currencies are checked before accepting a positive-valu
   expect(() => policy.quote(100, 'USD', 'US')).toThrow('not enabled');
   expect(policy.quote(0, 'USD', 'US').total).toBe(0);
 });
+
+test('delivery rules normalize country and currency before checking duplicates', () => {
+  expect(
+    checkoutRules.parse([
+      {
+        country: ' ng ',
+        currency: ' ngn ',
+        shipping: 10000,
+        taxBasisPoints: 0,
+      },
+    ])[0],
+  ).toMatchObject({ country: 'NG', currency: 'NGN' });
+  expect(() =>
+    checkoutRules.parse([
+      { country: 'ng', currency: 'ngn', shipping: 0, taxBasisPoints: 0 },
+      { country: 'NG', currency: 'NGN', shipping: 0, taxBasisPoints: 0 },
+    ]),
+  ).toThrow();
+});

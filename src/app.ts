@@ -117,6 +117,19 @@ export function createApp(config: Config, deps: Dependencies) {
       rateLimit(deps.limiter, 'auth', 10),
     ),
   );
+  app.get('/api/v1/checkout/options', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      data: {
+        destinations: config.CHECKOUT_RULES_JSON.map(
+          ({ country, currency }) => ({ country, currency }),
+        ),
+        paymentCurrencies: deps.paymentGateway
+          ? config.PAYSTACK_CURRENCIES
+          : null,
+      },
+    });
+  });
   app.use('/api/v1', catalogRouter(catalog, guard));
   app.get(
     '/api/v1/search',

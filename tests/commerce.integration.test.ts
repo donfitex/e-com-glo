@@ -257,6 +257,16 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
         .shippingAddress,
     ).toMatchObject({ email: 'delivery@example.com', phone: '+2348012345678' });
   });
+  test('checkout options expose configured country/currency pairs without authentication', async () => {
+    const options = await request(app)
+      .get('/api/v1/checkout/options')
+      .expect(200);
+    expect(options.body.data.destinations).toEqual([
+      { country: 'NG', currency: 'USD' },
+    ]);
+    expect(options.body.data.paymentCurrencies).toBeNull();
+    expect(options.headers['cache-control']).toBe('no-store');
+  });
   test('liveness, dependency readiness, headers and safe errors', async () => {
     expect((await request(app).get('/health')).body.service).toBe(
       'E-com Global',

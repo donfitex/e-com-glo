@@ -39,7 +39,11 @@ export const address = z
     city: z.string().trim().min(1).max(100),
     region: z.string().trim().max(100).optional(),
     postalCode: z.string().trim().min(1).max(30),
-    country: z.string().regex(/^[A-Z]{2}$/),
+    country: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{2}$/),
   })
   .strict();
 export type Address = z.infer<typeof address>;

@@ -6,8 +6,12 @@ export const checkoutRules = z
   .array(
     z
       .object({
-        country: z.string().regex(/^[A-Z]{2}$/),
-        currency,
+        country: z
+          .string()
+          .trim()
+          .toUpperCase()
+          .regex(/^[A-Z]{2}$/),
+        currency: z.string().trim().toUpperCase().pipe(currency),
         shipping: z.number().int().min(0).max(100000000),
         taxBasisPoints: z.number().int().min(0).max(10000),
         freeShippingAbove: z.number().int().min(0).optional(),
@@ -41,7 +45,7 @@ export class CheckoutPolicy {
       rule,
       422,
       'DESTINATION_UNAVAILABLE',
-      'Delivery is not configured for this destination and currency',
+      `Delivery is not configured for ${country} with ${currency}. Ask the store to enable this destination and currency.`,
     );
     const shipping =
       rule.freeShippingAbove !== undefined && subtotal >= rule.freeShippingAbove

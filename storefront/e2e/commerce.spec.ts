@@ -76,7 +76,7 @@ test('customer journey: discover, register, add to bag, quote and place unpaid o
   await page.getByLabel('City', { exact: true }).fill('New York');
   await page.getByLabel('State / region').fill('NY');
   await page.getByLabel('Postal code').fill('10001');
-  await page.getByLabel('Country code').fill('US');
+  await page.getByLabel('Delivery country').selectOption('US');
   await page.getByRole('button', { name: 'Calculate delivery & tax' }).click();
   await expect(page.getByRole('button', { name: 'Place order' })).toBeEnabled();
   await page.getByRole('button', { name: 'Place order' }).click();

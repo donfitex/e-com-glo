@@ -13,10 +13,24 @@ import {
   type Quote,
   type Order,
 } from '@/lib/types';
+interface CheckoutOptions {
+  destinations: { country: string; currency: string }[];
+  paymentCurrencies: string[] | null;
+}
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
 export function Checkout() {
   const { user, loading } = useSession();
   const router = useRouter();
   const [cart, setCart] = useState<Cart | null>(null);
+  const [options, setOptions] = useState<CheckoutOptions | null>(null);
+  const destinations =
+    options?.destinations.filter(
+      (destination) => destination.currency === cart?.currency,
+    ) ?? [];
+  const paymentSupported =
+    !cart?.total ||
+    !options?.paymentCurrencies ||
+    options.paymentCurrencies.includes(cart.currency!);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -25,8 +39,14 @@ export function Checkout() {
   const revision = useRef(0);
   useEffect(() => {
     if (user)
-      api<Cart>('/cart')
-        .then(setCart)
+      Promise.all([
+        api<Cart>('/cart'),
+        api<CheckoutOptions>('/checkout/options'),
+      ])
+        .then(([cart, options]) => {
+          setCart(cart);
+          setOptions(options);
+        })
         .catch((e) => setError(e.message));
   }, [user]);
   async function preview(e: FormEvent<HTMLFormElement>) {
@@ -114,6 +134,17 @@ export function Checkout() {
           {error}
         </div>
       )}
+      {cart?.items.length &&
+      options &&
+      (!destinations.length || !paymentSupported) ? (
+        <div className="notice" role="status">
+          {!paymentSupported
+            ? `Paystack payments are not enabled for your bag’s ${cart.currency} currency.`
+            : `No delivery rates are configured for your bag’s ${cart.currency} currency.`}{' '}
+          Please contact the store before placing this order. Your bag has been
+          kept.
+        </div>
+      ) : null}
       {cart && !cart.items.length ? (
         <div className="empty-state">
           <p>Your bag is empty.</p>
@@ -219,27 +250,42 @@ export function Checkout() {
                 />
               </label>
               <label>
-                Country code
-                <input
+                Delivery country
+                <select
                   name="country"
-                  placeholder="e.g. US, GB, NG"
-                  minLength={2}
-                  maxLength={2}
-                  pattern="[A-Za-z]{2}"
                   required
                   autoComplete="shipping country"
-                />
+                  defaultValue=""
+                  disabled={!destinations.length}
+                >
+                  <option value="" disabled>
+                    {options
+                      ? 'Choose a delivery country'
+                      : 'Loading delivery countries…'}
+                  </option>
+                  {destinations.map(({ country }) => (
+                    <option key={country} value={country}>
+                      {regionNames.of(country) ?? country} ({country})
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
             <button
               className="button outline"
-              disabled={busy || !cart?.items.length}
+              disabled={
+                busy ||
+                !cart?.items.length ||
+                !destinations.length ||
+                !paymentSupported
+              }
             >
               {busy ? 'Calculating…' : 'Calculate delivery & tax'}
             </button>
             <small>
-              Availability depends on the destination and the currency of your
-              bag.
+              {cart?.currency
+                ? `Delivery countries shown accept your bag’s ${cart.currency} currency.`
+                : 'Delivery countries appear once your bag is loaded.'}
             </small>
           </form>
           <aside className="summary-card">

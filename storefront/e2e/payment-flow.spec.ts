@@ -29,6 +29,11 @@ test('placing a payable order redirects directly to Paystack hosted checkout', a
           },
         ],
       };
+    else if (path.endsWith('/checkout/options'))
+      data = {
+        destinations: [{ country: 'NG', currency: 'NGN' }],
+        paymentCurrencies: ['NGN'],
+      };
     else if (path.endsWith('/orders/quote'))
       data = {
         currency: 'NGN',
@@ -63,7 +68,7 @@ test('placing a payable order redirects directly to Paystack hosted checkout', a
     .fill('10 Market Road');
   await page.getByLabel('City', { exact: true }).fill('Lagos');
   await page.getByLabel('Postal code').fill('100001');
-  await page.getByLabel('Country code').fill('NG');
+  await page.getByLabel('Delivery country').selectOption('NG');
   await page.getByRole('button', { name: 'Calculate delivery & tax' }).click();
   await page.getByRole('button', { name: 'Place order' }).click();
   await expect(page).toHaveURL(
@@ -112,4 +117,41 @@ test('dark account cards and form labels have readable contrast', async ({
     'color',
     'rgb(172, 185, 175)',
   );
+});
+
+test('empty delivery configuration prevents an unsupported quote and explains the bag currency', async ({
+  page,
+}) => {
+  let quoted = false;
+  await page.route('**/api/commerce/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/orders/quote')) quoted = true;
+    const data = path.endsWith('/auth/me')
+      ? user
+      : path.endsWith('/cart')
+        ? {
+            currency: 'NGN',
+            total: 10000,
+            subtotal: 10000,
+            items: [
+              {
+                productId: orderId,
+                name: 'Merchant product',
+                quantity: 1,
+                lineTotal: 10000,
+              },
+            ],
+          }
+        : { destinations: [], paymentCurrencies: ['NGN'] };
+    await route.fulfill({ json: { data } });
+  });
+  await page.goto('/checkout');
+  await expect(page.getByRole('status')).toContainText(
+    'No delivery rates are configured for your bag’s NGN currency',
+  );
+  await expect(page.getByLabel('Delivery country')).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Calculate delivery & tax' }),
+  ).toBeDisabled();
+  expect(quoted).toBe(false);
 });
