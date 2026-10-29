@@ -5,9 +5,12 @@ export interface Embeddings {
 }
 export class LocalEmbeddings implements Embeddings {
   readonly model = 'sentence-transformers/all-MiniLM-L6-v2';
-  constructor(private readonly endpoint: string) {}
+  constructor(
+    private readonly endpoint: string,
+    private readonly transport: typeof fetch = fetch,
+  ) {}
   async embed(text: string) {
-    const response = await fetch(new URL('/embed', this.endpoint), {
+    const response = await this.transport(new URL('/embed', this.endpoint), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text }),

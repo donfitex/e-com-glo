@@ -1,3 +1,4 @@
+import { ProductIndexer } from '../src/modules/search/indexer';
 import { PrismaClient } from '@prisma/client';
 import { PgVectorSearch } from '../src/modules/search/vector-search';
 import { productQuery } from '../src/modules/catalog/schemas';
@@ -58,6 +59,47 @@ suite('optional pgvector search integration', () => {
     expect(result.total).toBe(1);
     expect(result.items[0]?.id).toBe(productId);
     expect((await search.search({ ...query, currency: 'EUR' })).total).toBe(0);
+  });
+  test('incremental indexing skips unchanged records, reindexes edits and invalidates result caches', async () => {
+    const embed = jest.fn(async () => vector);
+    const invalidate = jest.fn(async () => {});
+    const indexer = new ProductIndexer(
+      db,
+      { model: embeddings.model, embed },
+      { ...cache, invalidate },
+    );
+    const first = await indexer.batch(undefined, 50, [productId]);
+    expect(first.skipped).toBeGreaterThanOrEqual(1);
+    expect(embed).not.toHaveBeenCalled();
+    await db.product.update({
+      where: { id: productId },
+      data: { description: 'Updated sports audio' },
+    });
+    expect((await indexer.batch(undefined, 50, [productId])).indexed).toBe(1);
+    expect(embed).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    const rows = await db.$queryRaw<
+      { sourceText: string }[]
+    >`SELECT "sourceText" FROM "ProductEmbedding" WHERE "productId"=${productId}::uuid`;
+    expect(rows[0]?.sourceText).toContain('Updated sports audio');
+    await db.product.update({
+      where: { id: productId },
+      data: { description: 'Another change' },
+    });
+    expect(
+      (
+        await new ProductIndexer(
+          db,
+          {
+            model: embeddings.model,
+            embed: async () => {
+              throw new Error('provider unavailable');
+            },
+          },
+          cache,
+        ).batch(undefined, 50, [productId])
+      ).failed,
+    ).toBe(1);
   });
   test('changed source text excludes stale vectors', async () => {
     await db.product.update({

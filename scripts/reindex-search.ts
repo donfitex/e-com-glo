@@ -1,35 +1,46 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { createClient } from 'redis';
 import { LocalEmbeddings } from '../src/modules/search/embeddings';
+import { ProductIndexer } from '../src/modules/search/indexer';
+import { CatalogCache } from '../src/infrastructure/cache';
 const db = new PrismaClient();
 async function main() {
-  if (!process.env.SEMANTIC_SEARCH_URL)
-    throw new Error('SEMANTIC_SEARCH_URL required');
-  const embeddings = new LocalEmbeddings(process.env.SEMANTIC_SEARCH_URL);
-  let cursor: string | undefined;
-  for (;;) {
-    const products = await db.product.findMany({
-      where: { active: true },
-      orderBy: { id: 'asc' },
-      take: 100,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    });
-    if (!products.length) break;
-    for (const product of products) {
-      const vector = JSON.stringify(
-        await embeddings.embed(`${product.name} ${product.description}`),
-      );
-      await db.$executeRaw`INSERT INTO "ProductEmbedding" ("productId",model,"sourceText",embedding)
-    VALUES (${product.id}::uuid,${embeddings.model},${`${product.name} ${product.description}`},${vector}::vector)
-    ON CONFLICT ("productId") DO UPDATE SET model=EXCLUDED.model,"sourceText"=EXCLUDED."sourceText",embedding=EXCLUDED.embedding`;
+  if (!process.env.SEMANTIC_SEARCH_URL || !process.env.REDIS_URL)
+    throw new Error('Configure the model and Redis endpoints');
+  const redis = createClient({
+    url: process.env.REDIS_URL,
+    disableOfflineQueue: true,
+  });
+  redis.on('error', () => {});
+  try {
+    await redis.connect();
+    const indexer = new ProductIndexer(
+      db,
+      new LocalEmbeddings(process.env.SEMANTIC_SEARCH_URL),
+      new CatalogCache(redis),
+    );
+    let cursor: string | undefined;
+    const totals = { indexed: 0, skipped: 0, failed: 0 };
+    for (;;) {
+      const batch = await indexer.batch(cursor);
+      totals.indexed += batch.indexed;
+      totals.skipped += batch.skipped;
+      totals.failed += batch.failed;
+      if (!batch.cursor) break;
+      cursor = batch.cursor;
     }
-    cursor = products.at(-1)!.id;
+    await indexer.removeInactive();
+    process.stdout.write(JSON.stringify(totals) + '\n');
+    if (totals.failed) process.exitCode = 1;
+  } finally {
+    if (redis.isOpen) await redis.quit();
   }
 }
 main()
   .catch(() => {
     process.stderr.write(
-      'Search indexing failed; check pgvector and local model service.\n',
+      'Search indexing failed; check pgvector, Redis and the local model service.\n',
     );
     process.exitCode = 1;
   })
