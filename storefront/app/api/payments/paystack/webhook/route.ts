@@ -2,22 +2,22 @@ import { limitedBody, BodyTooLarge } from '@/lib/request-body';
 import { apiOrigin } from '@/lib/server-api';
 export const runtime = 'nodejs';
 export async function POST(request: Request) {
-  const signature = request.headers.get('stripe-signature');
+  const signature = request.headers.get('x-paystack-signature');
   if (!signature)
     return Response.json(
-      { error: { message: 'Stripe signature required' } },
+      { error: { message: 'Paystack signature required' } },
       { status: 400 },
     );
   try {
     const body = await limitedBody(request);
     if (body.byteLength > 65536) return new Response(null, { status: 413 });
     const result = await fetch(
-      `${apiOrigin()}/api/v1/payments/stripe/webhook`,
+      `${apiOrigin()}/api/v1/payments/paystack/webhook`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Stripe-Signature': signature,
+          'X-Paystack-Signature': signature,
         },
         body,
         signal: AbortSignal.timeout(15000),

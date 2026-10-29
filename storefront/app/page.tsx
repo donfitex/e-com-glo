@@ -14,7 +14,7 @@ import {
   Leaf,
   Puzzle,
 } from 'lucide-react';
-import { safeCatalog } from '@/lib/server-api';
+import { safeCatalog, defaultCurrency } from '@/lib/server-api';
 import { ProductCard } from '@/components/product-card';
 import { ProductArt } from '@/components/product-art';
 export const dynamic = 'force-dynamic';
@@ -29,7 +29,7 @@ const icons = [
   Puzzle,
 ];
 export default async function Home() {
-  const data = await safeCatalog({ currency: 'USD', limit: '4' });
+  const data = await safeCatalog({ currency: defaultCurrency(), limit: '4' });
   return (
     <>
       <section className="shell hero">

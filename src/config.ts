@@ -13,14 +13,15 @@ export const configSchema = z.object({
         return z.NEVER;
       }
     }),
-  STRIPE_SECRET_KEY: z
+  PAYSTACK_SECRET_KEY: z
     .string()
     .regex(/^sk_test_/)
     .optional(),
-  STRIPE_WEBHOOK_SECRET: z
+  PAYSTACK_CURRENCIES: z
     .string()
-    .regex(/^whsec_/)
-    .optional(),
+    .default('NGN')
+    .transform((v) => v.split(',').map((c) => c.trim().toUpperCase()))
+    .pipe(z.array(z.enum(['NGN', 'USD'])).min(1)),
   STOREFRONT_ORIGIN: z.string().url().default('http://localhost:3001'),
   SEMANTIC_SEARCH_URL: z.string().url().optional(),
   NODE_ENV: z

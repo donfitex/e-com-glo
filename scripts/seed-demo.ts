@@ -80,6 +80,16 @@ async function main() {
       'Sandstone',
     ],
   ];
+  const ngnPrices: Record<string, number> = {
+    'EG-AUDIO-001': 11900000,
+    'EG-BAG-001': 4900000,
+    'EG-LAMP-001': 8900000,
+    'EG-BOTTLE-001': 3900000,
+    'EG-SHOES-001': 9900000,
+    'EG-CARE-001': 5900000,
+    'EG-BOOK-001': 2900000,
+    'EG-SPEAKER-001': 9500000,
+  };
   for (const [
     slug,
     sku,
@@ -91,6 +101,23 @@ async function main() {
   ] of products) {
     const category = await db.category.findUniqueOrThrow({
       where: { slug: String(slug) },
+    });
+    await db.product.upsert({
+      where: { sku: `${sku}-NGN` },
+      create: {
+        sku: `${sku}-NGN`,
+        name: String(name),
+        description: String(description),
+        price: ngnPrices[String(sku)]!,
+        currency: 'NGN',
+        stock: 25,
+        categoryId: category.id,
+        attributes: {
+          illustration: String(illustration),
+          color: String(color),
+        },
+      },
+      update: {},
     });
     await db.product.upsert({
       where: { sku: String(sku) },

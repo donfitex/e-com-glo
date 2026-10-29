@@ -495,7 +495,7 @@ export function Admin() {
             ))}
           </div>
           <p className="filter-note">
-            Paid orders are confirmed by verified Stripe notifications. Paid
+            Paid orders are confirmed by verified Paystack notifications. Paid
             cancellations require the separate refund process; this dashboard
             cannot bypass it.
           </p>

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { categories, catalog } from '@/lib/server-api';
+import { categories, catalog, defaultCurrency } from '@/lib/server-api';
 import { currencies } from '@/lib/types';
 import { ProductCard } from '@/components/product-card';
 export const dynamic = 'force-dynamic';
@@ -24,7 +24,7 @@ export default async function Shop({
     const category = taxonomy.find((c) => c.slug === q.category);
     products = await catalog({
       q: q.q,
-      currency: q.currency ?? 'USD',
+      currency: q.currency ?? defaultCurrency(),
       categoryId: category?.id,
       sort: q.sort ?? 'newest',
       page: q.page ?? '1',
@@ -77,7 +77,10 @@ export default async function Shop({
             </label>
             <label>
               Currency
-              <select name="currency" defaultValue={q.currency ?? 'USD'}>
+              <select
+                name="currency"
+                defaultValue={q.currency ?? defaultCurrency()}
+              >
                 {currencies.map((c) => (
                   <option key={c}>{c}</option>
                 ))}
@@ -117,7 +120,7 @@ export default async function Shop({
           <div className="results-heading">
             <span>{products.total} finds</span>
             <span>
-              {q.currency ?? 'USD'} · Page {products.page}
+              {q.currency ?? defaultCurrency()} · Page {products.page}
             </span>
           </div>
           {error ? (

@@ -53,3 +53,11 @@ export async function safeCatalog(
     };
   }
 }
+
+export function defaultCurrency() {
+  return ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'INR'].includes(
+    process.env.DEFAULT_CURRENCY ?? '',
+  )
+    ? process.env.DEFAULT_CURRENCY!
+    : 'NGN';
+}

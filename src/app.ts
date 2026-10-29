@@ -68,10 +68,10 @@ export function createApp(config: Config, deps: Dependencies) {
   );
   const payments = new PaymentService(deps.db, deps.cache, deps.paymentGateway);
   app.post(
-    '/api/v1/payments/stripe/webhook',
+    '/api/v1/payments/paystack/webhook',
     express.raw({ type: 'application/json', limit: '64kb' }),
     endpoint(async (req, res) => {
-      const signature = z.string().parse(req.headers['stripe-signature']);
+      const signature = z.string().parse(req.headers['x-paystack-signature']);
       await payments.webhook(req.body as Buffer, signature);
       res.json({ received: true });
     }),
@@ -149,7 +149,10 @@ export function createApp(config: Config, deps: Dependencies) {
         deps.db,
         pricing,
         deps.cache,
-        new CheckoutPolicy(config.CHECKOUT_RULES_JSON),
+        new CheckoutPolicy(
+          config.CHECKOUT_RULES_JSON,
+          deps.paymentGateway ? config.PAYSTACK_CURRENCIES : undefined,
+        ),
       ),
       guard,
     ),

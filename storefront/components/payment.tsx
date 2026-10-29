@@ -10,12 +10,49 @@ export function Payment() {
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const returned = params.has('reference') || params.has('trxref');
   useEffect(() => {
-    if (id)
-      api<Order>(`/orders/${id}`)
-        .then(setOrder)
-        .catch((e) => setError(e.message));
-  }, [id]);
+    if (!id) return;
+    let active = true;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    async function refresh() {
+      try {
+        const next = await api<Order>(`/orders/${id}`);
+        if (!active) return;
+        setOrder(next);
+        if (
+          returned &&
+          next.paymentStatus === 'UNPAID' &&
+          next.status === 'PENDING' &&
+          attempts++ < 12
+        )
+          timer = setTimeout(() => void refresh(), 5000);
+      } catch (e) {
+        if (active)
+          setError(
+            e instanceof Error
+              ? e.message
+              : 'Could not refresh payment status.',
+          );
+      }
+    }
+    void refresh();
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [id, returned]);
+  async function refreshStatus() {
+    setError('');
+    try {
+      setOrder(await api<Order>(`/orders/${id}`));
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Could not refresh payment status.',
+      );
+    }
+  }
   async function pay() {
     setBusy(true);
     setError('');
@@ -27,7 +64,7 @@ export function Payment() {
       const target = new URL(url);
       if (
         target.protocol !== 'https:' ||
-        target.hostname !== 'checkout.stripe.com'
+        target.hostname !== 'checkout.paystack.com'
       )
         throw new Error('Invalid payment destination');
       window.location.assign(target.href);
@@ -57,7 +94,7 @@ export function Payment() {
             </p>
             {params.get('cancelled') && (
               <p>
-                Your Stripe checkout was cancelled. You can retry while the
+                Your Paystack checkout was cancelled. You can retry while the
                 order is pending.
               </p>
             )}
@@ -67,13 +104,16 @@ export function Payment() {
                 disabled={busy}
                 onClick={() => void pay()}
               >
-                {busy ? 'Opening secure checkout…' : 'Continue to Stripe'}
+                {busy ? 'Opening secure checkout…' : 'Continue to Paystack'}
               </button>
             )}
             <p>
-              Confirmation is based on verified Stripe notifications. Returning
-              to this page does not mark an order paid.
+              Confirmation is based on verified Paystack notifications.
+              Returning to this page does not mark an order paid.
             </p>
+            <button className="text-link" onClick={() => void refreshStatus()}>
+              Check payment status
+            </button>
             <Link className="text-link" href={`/account/orders/${order.id}`}>
               View your order →
             </Link>

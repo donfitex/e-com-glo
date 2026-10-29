@@ -24,9 +24,12 @@ export const checkoutRules = z
 export type CheckoutRules = z.infer<typeof checkoutRules>;
 export class CheckoutPolicy {
   readonly version: string;
-  constructor(private readonly rules: CheckoutRules) {
+  constructor(
+    private readonly rules: CheckoutRules,
+    private readonly paymentCurrencies?: readonly string[],
+  ) {
     this.version = createHash('sha256')
-      .update(JSON.stringify(rules))
+      .update(JSON.stringify({ rules, paymentCurrencies }))
       .digest('hex')
       .slice(0, 16);
   }
@@ -52,6 +55,14 @@ export class CheckoutPolicy {
       409,
       'TOTAL_TOO_LARGE',
       'Order total exceeds the supported limit',
+    );
+    assert(
+      total === 0 ||
+        !this.paymentCurrencies ||
+        this.paymentCurrencies.includes(currency),
+      422,
+      'PAYMENT_CURRENCY_UNSUPPORTED',
+      'This currency is not enabled for your Paystack merchant account',
     );
     return {
       currency,

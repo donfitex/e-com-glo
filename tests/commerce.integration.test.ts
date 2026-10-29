@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+import { PaystackGateway } from '../src/modules/payments/gateway';
 import { PaymentService } from '../src/modules/payments/service';
 import { PaymentGateway, PaymentNotice } from '../src/modules/payments/gateway';
 import request from 'supertest';
@@ -71,6 +73,7 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     await db.$connect();
   }, 20000);
   beforeEach(async () => {
+    await db.paymentEvent.deleteMany();
     await db.orderItem.deleteMany();
     await db.order.deleteMany();
     await db.cartItem.deleteMany();
@@ -427,16 +430,16 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
       id: 'evt_' + orderId,
       type: 'paid',
       orderId,
-      sessionId: 'cs_' + orderId,
+      reference: 'ecom-' + orderId,
       amount: 1999,
       currency: 'USD',
     };
     const gateway: PaymentGateway = {
       create: async () => ({
-        id: 'cs_' + orderId,
-        url: 'https://checkout.stripe.com/test',
+        id: 'ecom-' + orderId,
+        url: 'https://checkout.paystack.com/test',
       }),
-      expire: async () => {},
+      confirm: async (notice) => notice,
       verify: () => notice,
     };
     const payments = new PaymentService(db, cache, gateway);
@@ -461,14 +464,14 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     const gateway: PaymentGateway = {
       create: async () => ({
         id: 'unused',
-        url: 'https://checkout.stripe.com/test',
+        url: 'https://checkout.paystack.com/test',
       }),
-      expire: async () => {},
+      confirm: async (notice) => notice,
       verify: () => ({
         id: 'evt_wrong_' + orderId,
         type: 'paid',
         orderId,
-        sessionId: 'cs_' + orderId,
+        reference: 'ecom-' + orderId,
         amount: 1,
         currency: 'USD',
       }),
@@ -495,16 +498,16 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
       id: 'evt_late_' + orderId,
       type: 'paid',
       orderId,
-      sessionId: 'cs_' + orderId,
+      reference: 'ecom-' + orderId,
       amount: 1999,
       currency: 'USD',
     };
     const gateway: PaymentGateway = {
       create: async () => ({
         id: 'unused',
-        url: 'https://checkout.stripe.com/test',
+        url: 'https://checkout.paystack.com/test',
       }),
-      expire: async () => {},
+      confirm: async (notice) => notice,
       verify: () => notice,
     };
     const payments = new PaymentService(db, cache, gateway);
@@ -537,5 +540,146 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
           .send({})
       ).status,
     ).toBe(503);
+  });
+  test('payment initialization is serialized and reuses one persisted Paystack URL', async () => {
+    await add();
+    const orderId = (await checkout()).body.data.id;
+    const create = jest
+      .fn<
+        ReturnType<PaymentGateway['create']>,
+        Parameters<PaymentGateway['create']>
+      >()
+      .mockResolvedValue({
+        id: `ecom-${orderId}`,
+        url: 'https://checkout.paystack.com/initialized',
+      });
+    const gateway: PaymentGateway = {
+      create,
+      verify: () => ({ id: 'unused', type: 'ignored' }),
+      confirm: async (notice) => notice,
+    };
+    const payments = new PaymentService(db, cache, gateway);
+    const result = await Promise.all([
+      payments.start(customerId, orderId),
+      payments.start(customerId, orderId),
+    ]);
+    expect(result).toEqual([
+      { url: 'https://checkout.paystack.com/initialized' },
+      { url: 'https://checkout.paystack.com/initialized' },
+    ]);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0]?.[0].email).toBe('buyer@example.com');
+    expect(await db.order.findUnique({ where: { id: orderId } })).toMatchObject(
+      { paymentProvider: 'paystack', paymentReference: `ecom-${orderId}` },
+    );
+  });
+  test('server-priced free orders are confirmed without an external payment', async () => {
+    await db.product.update({ where: { id: productId }, data: { price: 0 } });
+    await add();
+    const result = await checkout();
+    expect(result.status).toBe(201);
+    expect(result.body.data).toMatchObject({
+      total: 0,
+      status: 'CONFIRMED',
+      paymentStatus: 'PAID',
+      paymentProvider: 'free',
+    });
+  });
+  test('provider verification failure cannot confirm an order', async () => {
+    await add();
+    const orderId = (await checkout()).body.data.id;
+    const gateway: PaymentGateway = {
+      create: async () => ({
+        id: `ecom-${orderId}`,
+        url: 'https://checkout.paystack.com/test',
+      }),
+      verify: () => ({
+        id: `paystack:charge:failure-${orderId}`,
+        type: 'paid',
+        orderId,
+        reference: `ecom-${orderId}`,
+        amount: 1999,
+        currency: 'USD',
+      }),
+      confirm: async () => {
+        throw new Error('Provider unavailable');
+      },
+    };
+    await expect(
+      new PaymentService(db, cache, gateway).webhook(
+        Buffer.from('fixture'),
+        'fixture',
+      ),
+    ).rejects.toThrow('Provider unavailable');
+    expect(await db.order.findUnique({ where: { id: orderId } })).toMatchObject(
+      { paymentStatus: 'UNPAID', status: 'PENDING' },
+    );
+  });
+  test('raw Paystack webhook validates its header and verifies the transaction before confirming', async () => {
+    await add();
+    const orderId = (await checkout()).body.data.id;
+    const reference = `ecom-${orderId}`;
+    const data = {
+      id: 987654,
+      domain: 'test',
+      status: 'success',
+      reference,
+      amount: 1999,
+      currency: 'USD',
+      metadata: { orderId },
+    };
+    const transport = jest
+      .fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>()
+      .mockResolvedValue(new Response(JSON.stringify({ status: true, data })));
+    const secret = 'sk_test_http_fixture';
+    const gateway = new PaystackGateway(
+      secret,
+      'https://shop.example',
+      ['USD'],
+      transport,
+    );
+    const paymentApp = createApp(config, {
+      db,
+      cache,
+      limiter,
+      tokens,
+      passwords: new ScryptHasher(),
+      paymentGateway: gateway,
+      logger: pino({ level: 'silent' }),
+      ready: async () => {},
+    });
+    const payload = JSON.stringify({ event: 'charge.success', data });
+    const signature = createHmac('sha512', secret)
+      .update(payload)
+      .digest('hex');
+    expect(
+      (
+        await request(paymentApp)
+          .post('/api/v1/payments/paystack/webhook')
+          .set('Content-Type', 'application/json')
+          .set('x-paystack-signature', 'forged')
+          .send(payload)
+      ).status,
+    ).toBe(400);
+    expect(transport).not.toHaveBeenCalled();
+    for (let i = 0; i < 2; i++)
+      expect(
+        (
+          await request(paymentApp)
+            .post('/api/v1/payments/paystack/webhook')
+            .set('Content-Type', 'application/json')
+            .set('x-paystack-signature', signature)
+            .send(payload)
+        ).status,
+      ).toBe(200);
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(await db.order.findUnique({ where: { id: orderId } })).toMatchObject(
+      {
+        status: 'CONFIRMED',
+        paymentStatus: 'PAID',
+        paymentReference: reference,
+        providerTransactionId: '987654',
+      },
+    );
   });
 });

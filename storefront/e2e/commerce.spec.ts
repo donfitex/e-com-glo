@@ -36,6 +36,8 @@ test('customer journey: discover, register, add to bag, quote and place unpaid o
   });
   await page.getByRole('link', { name: 'Find your next favorite' }).click();
   await expect(page).toHaveURL(/\/shop/);
+  await page.locator('select[name="currency"]').selectOption('USD');
+  await page.getByRole('button', { name: 'Apply filters' }).click();
   await page
     .getByRole('link', { name: 'Everyday wireless headphones', exact: true })
     .last()
@@ -77,11 +79,16 @@ test('customer journey: discover, register, add to bag, quote and place unpaid o
   await page.getByRole('button', { name: 'Place order' }).click();
   await expect(page).toHaveURL(/\/checkout\/payment\?order=/);
   await expect(page.getByText('UNPAID', { exact: true })).toBeVisible();
+  const createdOrder = new URL(page.url()).searchParams.get('order');
+  await page.goto(
+    `/checkout/payment?order=${createdOrder}&reference=untrusted-callback`,
+  );
+  await expect(page.getByText('UNPAID', { exact: true })).toBeVisible();
   await page
-    .getByRole('button', { name: 'Continue to Stripe', exact: true })
+    .getByRole('button', { name: 'Continue to Paystack', exact: true })
     .click();
   await expect(
-    page.getByRole('alert').filter({ hasText: 'Stripe test checkout' }),
+    page.getByRole('alert').filter({ hasText: 'Paystack test checkout' }),
   ).toContainText('not configured');
   await page.getByRole('link', { name: 'View your order' }).click();
   await expect(
@@ -177,7 +184,7 @@ test('proxy bounds request bodies and the raw payment endpoint rejects unsigned 
     data: { email: 'boundary@example.com', password: 'x'.repeat(70000) },
   });
   expect(oversized.status()).toBe(413);
-  const webhook = await request.post('/api/payments/stripe/webhook', {
+  const webhook = await request.post('/api/payments/paystack/webhook', {
     data: { id: 'unsigned-test-event' },
   });
   expect(webhook.status()).toBe(400);

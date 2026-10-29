@@ -62,36 +62,36 @@ Money is stored in integer **minor units**: USD 1999 means $19.99; JPY 1999 mean
 
 All business routes are under `/api/v1`. Successful responses use `{ "data": ... }`; errors use `{ "error": { "code", "message", "requestId" } }`. Validation errors include field details. Private routes require `Authorization: Bearer <accessToken>`. Tokens expire after 15 minutes and require login again; there is no refresh-token endpoint.
 
-| Method | Path                       | Access / behavior                                                                             |
-| ------ | -------------------------- | --------------------------------------------------------------------------------------------- |
-| POST   | `/auth/register`           | Public: name, email, password (12–128 characters)                                             |
-| POST   | `/auth/login`              | Public: email, password                                                                       |
-| GET    | `/auth/me`                 | Current account                                                                               |
-| GET    | `/categories`              | Public                                                                                        |
-| POST   | `/categories`              | Admin: name, unique lowercase slug                                                            |
-| PATCH  | `/categories/:id`          | Admin: complete name/slug replacement                                                         |
-| DELETE | `/categories/:id`          | Admin; rejects categories referenced by products                                              |
-| GET    | `/products`                | Public, paginated active products                                                             |
-| GET    | `/products/:id`            | Public, active product                                                                        |
-| POST   | `/products`                | Admin: sku, name, description, price, currency, stock, categoryId; optional active/attributes |
-| PATCH  | `/products/:id`            | Admin: partial product fields                                                                 |
-| DELETE | `/products/:id`            | Admin: deactivate, preserving history                                                         |
-| GET    | `/search?q=...`            | Public text search with filters                                                               |
-| GET    | `/cart`                    | Current priced cart; reports unavailable items as conflicts                                   |
-| POST   | `/cart/items`              | Set absolute quantity: productId, quantity (1–100)                                            |
-| PATCH  | `/cart/items/:id`          | Set quantity; id is product UUID                                                              |
-| DELETE | `/cart/items/:id`          | Remove item                                                                                   |
-| DELETE | `/cart`                    | Clear cart                                                                                    |
-| POST   | `/orders/quote`            | Authenticated destination-aware quote from shippingAddress                                    |
-| POST   | `/orders/:id/payment`      | Current customer: create/reuse Stripe test Checkout session                                   |
-| POST   | `/payments/stripe/webhook` | Public raw-body endpoint, verified Stripe signature required                                  |
-| GET    | `/admin/products`          | Admin: all products, including inactive products                                              |
-| GET    | `/orders/preview`          | Current authoritative cart quote                                                              |
-| POST   | `/orders/checkout`         | Checkout with shippingAddress and Idempotency-Key header                                      |
-| GET    | `/orders`                  | Current customer's paginated history                                                          |
-| GET    | `/orders/:id`              | Current customer's order with snapshots                                                       |
-| GET    | `/admin/orders`            | Admin; optional status and pagination                                                         |
-| PATCH  | `/admin/orders/:id/status` | Admin: status                                                                                 |
+| Method | Path                         | Access / behavior                                                                             |
+| ------ | ---------------------------- | --------------------------------------------------------------------------------------------- |
+| POST   | `/auth/register`             | Public: name, email, password (12–128 characters)                                             |
+| POST   | `/auth/login`                | Public: email, password                                                                       |
+| GET    | `/auth/me`                   | Current account                                                                               |
+| GET    | `/categories`                | Public                                                                                        |
+| POST   | `/categories`                | Admin: name, unique lowercase slug                                                            |
+| PATCH  | `/categories/:id`            | Admin: complete name/slug replacement                                                         |
+| DELETE | `/categories/:id`            | Admin; rejects categories referenced by products                                              |
+| GET    | `/products`                  | Public, paginated active products                                                             |
+| GET    | `/products/:id`              | Public, active product                                                                        |
+| POST   | `/products`                  | Admin: sku, name, description, price, currency, stock, categoryId; optional active/attributes |
+| PATCH  | `/products/:id`              | Admin: partial product fields                                                                 |
+| DELETE | `/products/:id`              | Admin: deactivate, preserving history                                                         |
+| GET    | `/search?q=...`              | Public text search with filters                                                               |
+| GET    | `/cart`                      | Current priced cart; reports unavailable items as conflicts                                   |
+| POST   | `/cart/items`                | Set absolute quantity: productId, quantity (1–100)                                            |
+| PATCH  | `/cart/items/:id`            | Set quantity; id is product UUID                                                              |
+| DELETE | `/cart/items/:id`            | Remove item                                                                                   |
+| DELETE | `/cart`                      | Clear cart                                                                                    |
+| POST   | `/orders/quote`              | Authenticated destination-aware quote from shippingAddress                                    |
+| POST   | `/orders/:id/payment`        | Current customer: create/reuse Paystack test Checkout session                                 |
+| POST   | `/payments/paystack/webhook` | Public raw-body endpoint, verified Paystack signature required                                |
+| GET    | `/admin/products`            | Admin: all products, including inactive products                                              |
+| GET    | `/orders/preview`            | Current authoritative cart quote                                                              |
+| POST   | `/orders/checkout`           | Checkout with shippingAddress and Idempotency-Key header                                      |
+| GET    | `/orders`                    | Current customer's paginated history                                                          |
+| GET    | `/orders/:id`                | Current customer's order with snapshots                                                       |
+| GET    | `/admin/orders`              | Admin; optional status and pagination                                                         |
+| PATCH  | `/admin/orders/:id/status`   | Admin: status                                                                                 |
 
 Product/search filters: `categoryId`, `currency`, `minPrice`, `maxPrice`, `available=true|false`, `q`, `page`, `limit`, `sort=newest|price_asc|price_desc|name`. Prices use minor units. Sorting uses an ID tiebreaker. Category reads are ordered by slug. Products are fetched with their categories to avoid N+1 reads.
 
@@ -109,7 +109,7 @@ Example checkout body (prices and totals are deliberately rejected):
 }
 ```
 
-Send a unique `Idempotency-Key` of 8–100 letters, digits, underscores or hyphens and retain it for retries. Replaying a key returns its original order. A verified paid Stripe notification moves `PENDING → CONFIRMED`; administrators can then move `CONFIRMED → SHIPPED → DELIVERED`. Unpaid pending orders may be cancelled. Paid cancellations require a separate verified refund process. Terminal statuses cannot transition further.
+Send a unique `Idempotency-Key` of 8–100 letters, digits, underscores or hyphens and retain it for retries. Replaying a key returns its original order. A verified paid Paystack notification moves `PENDING → CONFIRMED`; administrators can then move `CONFIRMED → SHIPPED → DELIVERED`. Unpaid pending orders may be cancelled. Paid cancellations require a separate verified refund process. Terminal statuses cannot transition further.
 
 ## Verification
 
@@ -142,7 +142,7 @@ Use managed database backups and point-in-time recovery; rehearse restore proced
 
 ## Scope and extension points
 
-The storefront and API support **Stripe test-mode** checkout, signed payment notifications, destination-based shipping/tax rules and expiring stock reservations. Live Stripe keys are intentionally rejected. Refund execution, automated jurisdiction-aware tax services, live carrier quotes, FX conversion and merchant legal/support policies remain separate integrations. The shipping/tax engine is explicit merchant configuration, not a tax-compliance service. Hosting configuration is provided below; a Blueprint file alone is not a live deployment.
+The storefront and API support **Paystack test-mode** checkout, signed payment notifications, destination-based shipping/tax rules and expiring stock reservations. Live Paystack keys are intentionally rejected. Refund execution, automated jurisdiction-aware tax services, live carrier quotes, FX conversion and merchant legal/support policies remain separate integrations. The shipping/tax engine is explicit merchant configuration, not a tax-compliance service. Hosting configuration is provided below; a Blueprint file alone is not a live deployment.
 
 ## Optional local semantic discovery
 
@@ -168,21 +168,20 @@ Missing vectors, unavailable models, missing pgvector, timeouts, or no relevant 
 
 The storefront includes a responsive homepage, category/currency filters, text/optional semantic search, product pages, cart quantity/removal, address quotes, checkout, payment handoff, paginated order history and admin category/product/inventory/order tools. API authorization remains authoritative. The sample illustrations are bundled SVGs; they do not represent real supplier photography or product reviews.
 
-## Shipping, tax and Stripe test setup
+## Shipping, tax and Paystack test setup
 
 Each `CHECKOUT_RULES_JSON` entry supplies `country`, `currency`, `shipping` in minor units and `taxBasisPoints` (750 = 7.5%). Optional `freeShippingAbove` makes delivery free at or above that merchandise subtotal. Tax is exclusive and applies to merchandise only, rounded once per order; shipping is not taxed by this policy. Duplicate destination/currency rules are rejected. Unsupported destinations fail with 422. The storefront sends the quoted total and rule version; checkout recomputes both and rejects changed quotes rather than charging silently changed totals.
 
 Configure these values directly in the API host's secret manager:
 
-- `STRIPE_SECRET_KEY`: a Stripe **test** secret key (`sk_test_…`).
-- `STRIPE_WEBHOOK_SECRET`: signing secret for the test webhook endpoint.
+- `PAYSTACK_SECRET_KEY`: a Paystack **test** secret key (`sk_test_…`).
 - `STOREFRONT_ORIGIN`: the exact storefront HTTPS origin.
 
-For a separately hosted API, register `/api/v1/payments/stripe/webhook` on its public origin. The combined staging container exposes that endpoint at **`/api/payments/stripe/webhook`** on the storefront origin. Subscribe to `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `checkout.session.expired` in Stripe's test/sandbox mode. Forwarding preserves the raw body and Stripe signature.
+For a separately hosted API, register `/api/v1/payments/paystack/webhook` on its public origin. The combined staging container exposes that endpoint at **`/api/payments/paystack/webhook`** on the storefront origin. Configure a test-mode Paystack webhook for `charge.success`. Forwarding preserves the exact raw body and `x-paystack-signature`. The server validates HMAC-SHA512 with `PAYSTACK_SECRET_KEY`, then verifies the transaction with Paystack before changing order state.
 
-Checkout creates an unpaid pending order and reserves its inventory for one hour. New Stripe sessions can be started during the first 30 minutes (Stripe requires at least 30 minutes until session expiration). Creating a session is idempotent per order. A return URL never confirms payment: verified, deduplicated notifications must match the stored amount, currency and session. A notification after inventory was released sets `REFUND_REQUIRED` and does not fulfill the order. Paid-order refunds need the separate refund workflow.
+Checkout creates an unpaid pending order and reserves its inventory for one hour. Paystack checkout can be initialized until the local reservation deadline. Initialization is serialized per order, uses a deterministic reference, and stores the authorization URL for repeat requests. Paystack does not expose the previous provider's checkout-session expiration API; expired/cancelled local orders therefore cannot be assumed to have disabled hosted links. A return URL never confirms payment: verified, deduplicated notifications must match the stored amount, currency and session. A notification after inventory was released sets `REFUND_REQUIRED` and does not fulfill the order. Paid-order refunds need the separate refund workflow.
 
-The running API expires unpaid reservations in batches of 100 once per minute, with transactional protection across instances. A paused/free-tier service cannot sweep while asleep; overdue reservations are processed after it wakes. Stripe checkout remains unavailable with a clear 503 response until both secrets are configured. Local tests verify authentic Stripe signatures and simulated provider events; they do not charge a card or claim live Stripe integration verification.
+The running API expires unpaid reservations in batches of 100 once per minute, with transactional protection across instances. A paused/free-tier service cannot sweep while asleep; overdue reservations are processed after it wakes. Paystack checkout remains unavailable with a clear 503 response until the test secret is configured. Local tests verify Paystack HMAC signatures, mocked transaction initialization/server verification and simulated provider events; they do not charge a card or claim live Paystack integration verification.
 
 ## Browser verification
 
@@ -214,6 +213,18 @@ Deploy from the committed `main` branch using:
 
 Review the services and plan availability, enter the merchant-approved `CHECKOUT_RULES_JSON`, and Apply the Blueprint. This configuration is a deployment draft until Render validates it: the execution environment blocked current Render documentation/schema retrieval, and CLI platform validation requires a confirmed workspace and CLI authentication. No cloud resources are created merely by committing these files.
 
-After deployment, configure Stripe test secrets in the web service's secret settings and register the webhook URL above. To provision the first administrator without a shared default account, configure `ADMIN_EMAIL`, `ADMIN_NAME`, and a strong `ADMIN_PASSWORD` in the staging secret settings, redeploy once, then remove the provisioning values. Restarts do not reset an existing administrator's password or promote an existing customer account. Never commit these values or put them in browser-visible variables.
+After deployment, configure the Paystack test secret in the web service's secret settings and register the webhook URL above. To provision the first administrator without a shared default account, configure `ADMIN_EMAIL`, `ADMIN_NAME`, and a strong `ADMIN_PASSWORD` in the staging secret settings, redeploy once, then remove the provisioning values. Restarts do not reset an existing administrator's password or promote an existing customer account. Never commit these values or put them in browser-visible variables.
 
 For a local staging-image check, build with `docker build -f Dockerfile.staging -t e-com-global:staging .` and supply `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `CHECKOUT_RULES_JSON` and `STOREFRONT_ORIGIN` through an ignored env file or the container host's secret settings. In a managed proxy environment, add `--secret id=proxy_ca,src="$CODEX_PROXY_CERT"`. Verify `/api/health`, register a test customer, and exercise checkout before considering the staging deployment healthy.
+
+### Paystack currency and migration notes
+
+`PAYSTACK_SECRET_KEY` is server-only, must be a test key (`sk_test_…`), and is also the HMAC webhook-verification key. No separate webhook secret or browser public key is needed for hosted Checkout. Set it in the API/staging host’s secret manager, never in a `NEXT_PUBLIC_` variable. `PAYSTACK_CURRENCIES` defaults to `NGN`; set `NGN,USD` only if USD collection is approved for your merchant account. Other catalog currencies remain available for browsing but cannot be paid through this gateway. Amounts are integer kobo/cents supplied by the server, and the customer email comes from the authenticated account.
+
+The storefront defaults to NGN (`DEFAULT_CURRENCY=NGN`), and the opt-in demo seed now adds explicitly priced NGN SKUs alongside existing USD products. These are sample prices, not FX conversion. Existing merchant prices and inventory are never overwritten. Shipping/tax rules must explicitly cover the intended country and currency; for example, use country `NG` and currency `NGN` for a Nigeria delivery policy with merchant-approved amounts and rates.
+
+Migration `202610290003_paystack` renames legacy provider-specific payment fields and preserves historical transaction identifiers. Existing orders with previous-provider references are marked as legacy and cannot initialize a new Paystack payment; unpaid legacy orders should be cancelled and reordered. Previously paid history is retained. The old webhook routes and credentials are no longer active.
+
+A successful callback is never proof of payment. The payment screen refreshes status after a Paystack return, but only verified provider notifications can confirm a positive-value order. Server-calculated zero-total orders are confirmed locally without a provider charge. If initialization succeeds at Paystack but its response is lost before the database commits, the deterministic reference prevents a second initialization from creating a duplicate transaction; that rare incomplete setup may require cancellation/reordering after review. Late payments after stock release remain `REFUND_REQUIRED`; automatic refunds are outside this release.
+
+Official integration references: https://paystack.com/docs/api/transaction/ and https://paystack.com/docs/payments/webhooks/. Documentation retrieval was blocked by this workspace’s network policy; tests use provider-contract fixtures and do not claim an authenticated Paystack sandbox transaction. Configure the test key and exercise a sandbox checkout/webhook before activation.

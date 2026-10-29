@@ -14,42 +14,65 @@ export class PaymentService {
       this.gateway,
       503,
       'PAYMENTS_UNAVAILABLE',
-      'Stripe test checkout is not configured yet. Your order remains unpaid.',
+      'Paystack test checkout is not configured yet. Your order remains unpaid.',
     );
-    const order = await this.db.order.findFirst({ where: { id, userId } });
-    assert(order, 404, 'NOT_FOUND', 'Order not found');
-    assert(
-      order.status === 'PENDING' && order.paymentStatus === 'UNPAID',
-      409,
-      'ORDER_NOT_PAYABLE',
-      'This order cannot accept a payment',
-    );
-    assert(
-      order.expiresAt.getTime() > Date.now() + 30 * 60 * 1000,
-      409,
-      'PAYMENT_WINDOW_CLOSED',
-      'The payment window has closed. Wait for this reservation to expire before reordering.',
-    );
-    const session = await this.gateway.create(order);
-    const result = await this.db.order.updateMany({
-      where: {
-        id,
-        userId,
-        status: 'PENDING',
-        paymentStatus: 'UNPAID',
-        expiresAt: { gt: new Date() },
+    const gateway = this.gateway;
+    // Serialize initialization per order. An existing URL is reused without another provider call.
+    return this.db.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${id},0))`;
+        const order = await tx.order.findFirst({
+          where: { id, userId },
+          include: { user: { select: { email: true } } },
+        });
+        assert(order, 404, 'NOT_FOUND', 'Order not found');
+        assert(
+          order.status === 'PENDING' && order.paymentStatus === 'UNPAID',
+          409,
+          'ORDER_NOT_PAYABLE',
+          'This order cannot accept a payment',
+        );
+        assert(
+          order.expiresAt.getTime() > Date.now(),
+          409,
+          'PAYMENT_WINDOW_CLOSED',
+          'This order reservation has expired',
+        );
+        assert(
+          !order.paymentProvider || order.paymentProvider === 'paystack',
+          409,
+          'LEGACY_PAYMENT_ORDER',
+          'This order belongs to the previous payment provider. Create a new order.',
+        );
+        if (order.paymentReference && order.paymentAuthorizationUrl)
+          return { url: order.paymentAuthorizationUrl };
+        const session = await gateway.create({
+          ...order,
+          email: order.user.email,
+        });
+        const changed = await tx.order.updateMany({
+          where: {
+            id,
+            status: 'PENDING',
+            paymentStatus: 'UNPAID',
+            expiresAt: { gt: new Date() },
+          },
+          data: {
+            paymentReference: session.id,
+            paymentAuthorizationUrl: session.url,
+            paymentProvider: 'paystack',
+          },
+        });
+        assert(
+          changed.count === 1,
+          409,
+          'ORDER_CHANGED',
+          'Order changed or expired before payment initialization completed',
+        );
+        return { url: session.url };
       },
-      data: { stripeSessionId: session.id },
-    });
-    if (!result.count) {
-      await this.gateway.expire(session.id).catch(() => {});
-      throw new AppError(
-        409,
-        'ORDER_CHANGED',
-        'Order changed before payment. Check its current status.',
-      );
-    }
-    return { url: session.url };
+      { isolationLevel: 'ReadCommitted', timeout: 12000, maxWait: 12000 },
+    );
   }
   async webhook(body: Buffer, signature: string) {
     assert(
@@ -69,8 +92,12 @@ export class PaymentService {
       );
     }
     if (notice.type === 'ignored') return;
+    if (await this.db.paymentEvent.findUnique({ where: { id: notice.id } }))
+      return;
+    notice = await this.gateway.confirm(notice);
     try {
       await serializable(this.db, async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${notice.orderId},0))`;
         if (await tx.paymentEvent.findUnique({ where: { id: notice.id } }))
           return;
         const order = await tx.order.findUnique({
@@ -86,10 +113,17 @@ export class PaymentService {
           'Payment notification references an unknown order',
         );
         assert(
-          !order.stripeSessionId || order.stripeSessionId === notice.sessionId,
+          !order.paymentReference ||
+            order.paymentReference === notice.reference,
           400,
-          'SESSION_MISMATCH',
-          'Payment session does not match order',
+          'REFERENCE_MISMATCH',
+          'Payment reference does not match order',
+        );
+        assert(
+          !order.paymentProvider || order.paymentProvider === 'paystack',
+          400,
+          'PROVIDER_MISMATCH',
+          'Payment provider does not match order',
         );
         if (notice.type === 'paid') {
           assert(
@@ -105,8 +139,9 @@ export class PaymentService {
               data: {
                 paymentStatus: cancelled ? 'REFUND_REQUIRED' : 'PAID',
                 ...(!cancelled ? { status: 'CONFIRMED' } : {}),
-                stripeSessionId: notice.sessionId,
-                paymentIntentId: notice.paymentIntentId,
+                paymentReference: notice.reference,
+                paymentProvider: 'paystack',
+                providerTransactionId: notice.providerTransactionId,
               },
             });
             await tx.auditEvent.create({
@@ -118,11 +153,7 @@ export class PaymentService {
               },
             });
           }
-        } else if (
-          order.paymentStatus === 'UNPAID' &&
-          order.status === 'PENDING'
-        )
-          await this.release(tx, order);
+        }
         await tx.paymentEvent.create({
           data: { id: notice.id, orderId: order.id, kind: notice.type },
         });
@@ -167,6 +198,7 @@ export class PaymentService {
     });
     for (const candidate of orders)
       await serializable(this.db, async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${candidate.id},0))`;
         const order = await tx.order.findUnique({
           where: { id: candidate.id },
           include: { items: true },

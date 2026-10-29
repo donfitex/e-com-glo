@@ -106,6 +106,13 @@ export class OrderService {
             shippingAddress,
             currency: quote.currency!,
             total: totals.total,
+            ...(totals.total === 0
+              ? {
+                  paymentStatus: 'PAID',
+                  status: 'CONFIRMED',
+                  paymentProvider: 'free',
+                }
+              : {}),
             subtotal: totals.subtotal,
             shipping: totals.shipping,
             tax: totals.tax,

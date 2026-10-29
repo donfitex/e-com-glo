@@ -1,4 +1,4 @@
-import { StripeGateway } from './modules/payments/gateway';
+import { PaystackGateway } from './modules/payments/gateway';
 import { PaymentService } from './modules/payments/service';
 import { LocalEmbeddings } from './modules/search/embeddings';
 import { PgVectorSearch } from './modules/search/vector-search';
@@ -22,14 +22,13 @@ async function main() {
   redis.on('error', () => logger.warn('Redis connection error'));
   await db.$connect();
   await redis.connect();
-  const paymentGateway =
-    config.STRIPE_SECRET_KEY && config.STRIPE_WEBHOOK_SECRET
-      ? new StripeGateway(
-          config.STRIPE_SECRET_KEY,
-          config.STRIPE_WEBHOOK_SECRET,
-          config.STOREFRONT_ORIGIN,
-        )
-      : undefined;
+  const paymentGateway = config.PAYSTACK_SECRET_KEY
+    ? new PaystackGateway(
+        config.PAYSTACK_SECRET_KEY,
+        config.STOREFRONT_ORIGIN,
+        config.PAYSTACK_CURRENCIES,
+      )
+    : undefined;
   const paymentService = new PaymentService(
     db,
     new CatalogCache(redis),

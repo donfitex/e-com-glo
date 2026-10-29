@@ -248,7 +248,7 @@ export function Checkout() {
               Place order <ArrowRight size={17} />
             </button>
             <small>
-              <LockKeyhole size={13} /> Payment follows on Stripe’s secure
+              <LockKeyhole size={13} /> Payment follows on Paystack’s secure
               checkout page. An order remains unpaid until the payment is
               verified.
             </small>

@@ -32,3 +32,12 @@ test('rejects duplicate destination rules', () =>
       { country: 'US', currency: 'USD', shipping: 10, taxBasisPoints: 1 },
     ]),
   ).toThrow());
+
+test('configured payment currencies are checked before accepting a positive-value quote', () => {
+  const policy = new CheckoutPolicy(
+    [{ country: 'US', currency: 'USD', shipping: 0, taxBasisPoints: 0 }],
+    ['NGN'],
+  );
+  expect(() => policy.quote(100, 'USD', 'US')).toThrow('not enabled');
+  expect(policy.quote(0, 'USD', 'US').total).toBe(0);
+});
