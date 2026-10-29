@@ -2532,3 +2532,175 @@ button {
   background: #f5f5e9;
   color: #183f35;
 }
+.delivery-tracking {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 24px;
+  margin-block: 20px;
+}
+.delivery-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.delivery-heading > svg {
+  flex-shrink: 0;
+  color: var(--green);
+}
+.delivery-heading h2 {
+  font-size: 17px;
+  letter-spacing: -0.3px;
+  margin-top: 3px;
+}
+.delivery-tracking p {
+  font-size: 12px;
+}
+.delivery-estimate {
+  display: flex;
+  gap: 6px 16px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.delivery-estimate strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+.tracking-timeline {
+  list-style: none;
+  margin: 28px 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.tracking-timeline li {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  color: var(--muted);
+}
+.tracking-timeline li::before {
+  content: '';
+  height: 2px;
+  background: var(--line);
+  position: absolute;
+  top: 14px;
+  left: 38px;
+  right: 0;
+}
+.tracking-timeline li:last-child::before {
+  display: none;
+}
+.tracking-dot {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+}
+.tracking-timeline .tracking-complete {
+  color: var(--ink);
+}
+.tracking-complete .tracking-dot {
+  background: var(--action);
+  color: #fff;
+  border-color: var(--action);
+}
+.tracking-timeline li[aria-current='step'] .tracking-dot {
+  outline: 3px solid var(--line);
+  outline-offset: 3px;
+}
+.tracking-timeline strong {
+  font-size: 11px;
+  display: block;
+}
+.tracking-timeline small {
+  font-size: 10px;
+  display: block;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.tracking-details {
+  margin-block: 18px;
+  font-size: 12px;
+}
+.tracking-details dd {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.delivery-tracking .tracking-note {
+  margin-top: 18px;
+  font-size: 11px;
+}
+.delivery-compact {
+  padding: 18px;
+}
+.delivery-window {
+  border-top: 1px solid var(--line);
+  margin-top: 18px;
+  padding-top: 18px;
+  font-size: 12px;
+}
+.delivery-window p {
+  font-size: 11px;
+  margin-top: 4px;
+}
+.admin-order-row {
+  flex-wrap: wrap;
+}
+.order-fulfillment {
+  width: 100%;
+}
+.order-fulfillment .delivery-tracking {
+  margin-top: 0;
+}
+.shipment-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.shipment-editor input {
+  width: 100%;
+}
+.shipment-editor .button {
+  justify-self: start;
+}
+.order-details p,
+.admin-order-row p {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 520px) {
+  .delivery-tracking {
+    padding: 18px;
+  }
+  .delivery-heading h2 {
+    font-size: 15px;
+  }
+  .tracking-timeline {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .tracking-timeline li {
+    flex-direction: row;
+    gap: 14px;
+    align-items: center;
+  }
+  .tracking-timeline li::before {
+    height: 20px;
+    width: 2px;
+    top: 35px;
+    left: 14px;
+  }
+  .tracking-dot {
+    flex-shrink: 0;
+  }
+  .shipment-editor {
+    grid-template-columns: 1fr;
+  }
+}

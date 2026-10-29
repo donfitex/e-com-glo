@@ -1,3 +1,4 @@
+import { shipmentInput } from './delivery';
 import { Router, RequestHandler } from 'express';
 import { z } from 'zod';
 import { OrderStatus } from '@prisma/client';
@@ -84,6 +85,19 @@ export function orderRouter(service: OrderService, guard: RequestHandler) {
         .parse(req.query);
       res.json({
         data: await service.list(undefined, q.page, q.limit, q.status),
+      });
+    }),
+  );
+  r.patch(
+    '/admin/orders/:id/shipment',
+    admin,
+    endpoint(async (req, res) => {
+      res.json({
+        data: await service.updateShipment(
+          res.locals.identity.sub,
+          id.parse(req.params.id),
+          shipmentInput.parse(req.body),
+        ),
       });
     }),
   );

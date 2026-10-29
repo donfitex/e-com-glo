@@ -1,3 +1,4 @@
+import { deliveryWindow, ShipmentInput } from './delivery';
 import { CheckoutPolicy } from '../checkout/policy';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { Database, serializable } from '../../infrastructure/database';
@@ -99,6 +100,7 @@ export class OrderService {
             'Stock changed during checkout',
           );
         }
+        const paidAt = totals.total === 0 ? new Date() : null;
         const order = await tx.order.create({
           data: {
             userId,
@@ -117,6 +119,18 @@ export class OrderService {
             shipping: totals.shipping,
             tax: totals.tax,
             ruleVersion: totals.ruleVersion,
+            deliveryMinDays: totals.deliveryMinDays,
+            deliveryMaxDays: totals.deliveryMaxDays,
+            ...(paidAt
+              ? {
+                  paidAt,
+                  ...deliveryWindow(
+                    paidAt,
+                    totals.deliveryMinDays,
+                    totals.deliveryMaxDays,
+                  ),
+                }
+              : {}),
             items: {
               create: quote.items.map(({ lineTotal: _, ...line }) => {
                 void _;
@@ -177,6 +191,41 @@ export class OrderService {
     assert(order, 404, 'NOT_FOUND', 'Order not found');
     return order;
   }
+  async updateShipment(actorId: string, id: string, input: ShipmentInput) {
+    return serializable(this.db, async (tx) => {
+      const order = await tx.order.findUnique({ where: { id } });
+      assert(order, 404, 'NOT_FOUND', 'Order not found');
+      assert(
+        order.paymentStatus === 'PAID' &&
+          ['CONFIRMED', 'SHIPPED'].includes(order.status),
+        409,
+        'SHIPMENT_NOT_EDITABLE',
+        'Shipment updates require a paid order awaiting delivery',
+      );
+      const { expectedDeliveryDate, ...tracking } = input;
+      let dates = {};
+      if (expectedDeliveryDate) {
+        const date = new Date(`${expectedDeliveryDate}T00:00:00.000Z`);
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+        assert(
+          date >= today,
+          422,
+          'INVALID_DELIVERY_DATE',
+          'Expected delivery date cannot be in the past',
+        );
+        dates = { estimatedDeliveryFrom: date, estimatedDeliveryTo: date };
+      }
+      const saved = await tx.order.update({
+        where: { id },
+        data: { ...tracking, ...dates },
+      });
+      await tx.auditEvent.create({
+        data: { actorId, action: 'order.shipment_updated', entityId: id },
+      });
+      return saved;
+    });
+  }
   async transition(actorId: string, id: string, status: OrderStatus) {
     const order = await serializable(this.db, async (tx) => {
       const order = await tx.order.findUnique({
@@ -198,7 +247,7 @@ export class OrderService {
         'REFUND_REQUIRED',
         'Paid orders require a verified refund before cancellation',
       );
-      if (status === 'CONFIRMED')
+      if (['CONFIRMED', 'SHIPPED', 'DELIVERED'].includes(status))
         assert(
           order.paymentStatus === 'PAID',
           409,
@@ -215,7 +264,11 @@ export class OrderService {
           });
       const updated = await tx.order.update({
         where: { id },
-        data: { status },
+        data: {
+          status,
+          ...(status === 'SHIPPED' ? { shippedAt: new Date() } : {}),
+          ...(status === 'DELIVERED' ? { deliveredAt: new Date() } : {}),
+        },
       });
       await tx.auditEvent.create({
         data: {

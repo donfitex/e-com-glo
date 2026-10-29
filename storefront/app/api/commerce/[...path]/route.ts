@@ -5,7 +5,7 @@ import { apiOrigin } from '@/lib/server-api';
 export const runtime = 'nodejs';
 const COOKIE = 'ecom_session';
 const allowed =
-  /^(checkout\/options|auth\/(login|register|me|logout)|categories(?:\/[0-9a-f-]+)?|products(?:\/[0-9a-f-]+)?|search|cart(?:\/items(?:\/[0-9a-f-]+)?)?|orders(?:\/(?:preview|quote|checkout|[0-9a-f-]+(?:\/payment)?))?|admin\/(?:images|orders(?:\/[0-9a-f-]+\/status)?|products))$/;
+  /^(checkout\/options|auth\/(login|register|me|logout)|categories(?:\/[0-9a-f-]+)?|products(?:\/[0-9a-f-]+)?|search|cart(?:\/items(?:\/[0-9a-f-]+)?)?|orders(?:\/(?:preview|quote|checkout|[0-9a-f-]+(?:\/payment)?))?|admin\/(?:images|orders(?:\/[0-9a-f-]+\/(?:status|shipment))?|products))$/;
 async function proxy(
   req: NextRequest,
   context: { params: Promise<{ path: string[] }> },

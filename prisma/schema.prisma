@@ -88,6 +88,16 @@ model Order {
  paymentProvider String?
  providerTransactionId String?
  expiresAt DateTime @default(dbgenerated("now() + interval '60 minutes'"))
+ deliveryMinDays Int @default(3)
+ deliveryMaxDays Int @default(7)
+ paidAt DateTime?
+ shippedAt DateTime?
+ deliveredAt DateTime?
+ estimatedDeliveryFrom DateTime?
+ estimatedDeliveryTo DateTime?
+ carrier String?
+ trackingNumber String?
+ trackingUrl String?
  shippingAddress Json
  idempotencyKey String @db.VarChar(100)
  createdAt DateTime @default(now())

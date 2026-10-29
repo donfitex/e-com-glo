@@ -1,4 +1,5 @@
 'use client';
+import { DeliveryTracking } from './delivery-tracking';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -108,6 +109,9 @@ export function Payment() {
             <p>
               Status: <strong>{order.paymentStatus}</strong>
             </p>
+            {order.paymentStatus === 'PAID' && (
+              <DeliveryTracking order={order} compact />
+            )}
             {params.get('cancelled') && (
               <p>
                 Your Paystack checkout was cancelled. You can retry while the

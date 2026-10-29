@@ -224,3 +224,124 @@ test('proxy bounds request bodies and the raw payment endpoint rejects unsigned 
   const disallowed = await request.get('/api/commerce/internal-configuration');
   expect(disallowed.status()).toBe(404);
 });
+
+test('buyer tracks a paid order while admin saves shipping details and marks it delivered', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const buyerEmail = `tracking-buyer-${stamp}@example.com`;
+  const buyer = await db.user.create({
+    data: {
+      email: buyerEmail,
+      name: 'Tracking Buyer',
+      passwordHash: await new ScryptHasher().hash(password),
+    },
+  });
+  const paidAt = new Date();
+  const order = await db.order.create({
+    data: {
+      userId: buyer.id,
+      idempotencyKey: `tracking-${stamp}`,
+      status: 'CONFIRMED',
+      paymentStatus: 'PAID',
+      paymentProvider: 'browser-test-fixture',
+      currency: 'NGN',
+      total: 10000,
+      subtotal: 10000,
+      paidAt,
+      estimatedDeliveryFrom: new Date(paidAt.getTime() + 3 * 86400000),
+      estimatedDeliveryTo: new Date(paidAt.getTime() + 7 * 86400000),
+      shippingAddress: {
+        name: 'Tracking Buyer',
+        email: buyerEmail,
+        phone: '+2348012345678',
+        line1: '10 Market Road',
+        city: 'Lagos',
+        country: 'NG',
+        postalCode: '100001',
+      },
+    },
+  });
+  await page.goto(`/login?next=/account/orders/${order.id}`);
+  await page.getByLabel('Email address').fill(buyerEmail);
+  await page.getByLabel('Password', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(
+    page.getByRole('heading', {
+      name: 'Payment confirmed — awaiting delivery',
+    }),
+  ).toBeVisible();
+  await expect(page.locator('.delivery-estimate')).toContainText(
+    'Estimated delivery',
+  );
+  await expect(page.locator('.tracking-timeline li')).toHaveCount(4);
+  const adminContext = await browser.newContext({ baseURL });
+  try {
+    const adminPage = await adminContext.newPage();
+    await adminPage.goto('/login?next=/admin');
+    await adminPage.getByLabel('Email address').fill(adminEmail);
+    await adminPage.getByLabel('Password', { exact: true }).fill(password);
+    await adminPage
+      .getByRole('button', { name: 'Sign in', exact: true })
+      .click();
+    await adminPage
+      .getByRole('button', { name: 'Orders', exact: true })
+      .click();
+    const row = adminPage
+      .locator('.admin-order-row')
+      .filter({ hasText: order.id.slice(0, 8).toUpperCase() });
+    await row
+      .getByLabel('Delivery partner', { exact: true })
+      .fill('Example courier');
+    await row
+      .getByLabel('Tracking number', { exact: true })
+      .fill('EG-TRACK-123');
+    await row
+      .getByLabel('Carrier tracking link')
+      .fill('https://example.com/track/EG-TRACK-123');
+    await row
+      .getByLabel('Expected delivery date')
+      .fill(new Date(Date.now() + 4 * 86400000).toISOString().slice(0, 10));
+    await row.getByRole('button', { name: 'Save shipment details' }).click();
+    await expect(adminPage.getByRole('status')).toContainText(
+      'Shipment details updated',
+    );
+    await row.getByRole('button', { name: 'Mark as shipped' }).click();
+    await expect(
+      row.getByText('SHIPPED / PAID', { exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Refresh tracking' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'On the way — awaiting delivery' }),
+    ).toBeVisible();
+    await expect(page.getByText('EG-TRACK-123', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Track with carrier' }),
+    ).toHaveAttribute('href', 'https://example.com/track/EG-TRACK-123');
+    await row.getByRole('button', { name: 'Mark as delivered' }).click();
+    await expect(
+      row.getByText('DELIVERED / PAID', { exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Refresh tracking' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Delivered to your address' }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Marked delivered on', { exact: false }),
+    ).toBeVisible();
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: '../work/order-tracking-mobile.png',
+      fullPage: true,
+    });
+  } finally {
+    await adminContext.close();
+  }
+});

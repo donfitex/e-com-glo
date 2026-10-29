@@ -1,3 +1,4 @@
+import { deliveryWindow } from '../orders/delivery';
 import { z } from 'zod';
 import { address } from '../../shared/validation';
 import { Prisma } from '@prisma/client';
@@ -139,11 +140,22 @@ export class PaymentService {
           );
           if (order.paymentStatus !== 'PAID') {
             const cancelled = order.status === 'CANCELLED';
+            const paidAt = new Date();
             await tx.order.update({
               where: { id: order.id },
               data: {
                 paymentStatus: cancelled ? 'REFUND_REQUIRED' : 'PAID',
-                ...(!cancelled ? { status: 'CONFIRMED' } : {}),
+                ...(!cancelled
+                  ? {
+                      status: 'CONFIRMED',
+                      ...deliveryWindow(
+                        paidAt,
+                        order.deliveryMinDays,
+                        order.deliveryMaxDays,
+                      ),
+                    }
+                  : {}),
+                paidAt,
                 paymentReference: notice.reference,
                 paymentProvider: 'paystack',
                 providerTransactionId: notice.providerTransactionId,

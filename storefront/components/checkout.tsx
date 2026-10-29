@@ -321,6 +321,15 @@ export function Checkout() {
                   </span>
                 </div>
                 {quote && (
+                  <div className="delivery-window">
+                    <strong>Estimated shipping time</strong>
+                    <p>
+                      {quote.deliveryMinDays ?? 3}–{quote.deliveryMaxDays ?? 7}{' '}
+                      calendar days after payment confirmation.
+                    </p>
+                  </div>
+                )}
+                {quote && (
                   <div className="summary-total">
                     <span>Total · {quote.currency}</span>
                     <strong>{money(quote.total, quote.currency)}</strong>

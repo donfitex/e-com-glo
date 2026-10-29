@@ -14,9 +14,15 @@ export const checkoutRules = z
         currency: z.string().trim().toUpperCase().pipe(currency),
         shipping: z.number().int().min(0).max(100000000),
         taxBasisPoints: z.number().int().min(0).max(10000),
+        deliveryMinDays: z.number().int().min(0).max(180).optional(),
+        deliveryMaxDays: z.number().int().min(0).max(180).optional(),
         freeShippingAbove: z.number().int().min(0).optional(),
       })
-      .strict(),
+      .strict()
+      .refine(
+        (rule) => (rule.deliveryMaxDays ?? 7) >= (rule.deliveryMinDays ?? 3),
+        'Maximum delivery days must be at least the minimum',
+      ),
   )
   .max(300)
   .refine(
@@ -75,6 +81,8 @@ export class CheckoutPolicy {
       tax,
       total,
       ruleVersion: this.version,
+      deliveryMinDays: rule.deliveryMinDays ?? 3,
+      deliveryMaxDays: rule.deliveryMaxDays ?? 7,
     };
   }
 }

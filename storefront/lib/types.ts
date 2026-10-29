@@ -65,6 +65,16 @@ export interface Order {
   createdAt: string;
   items?: CartItem[];
   shippingAddress: Address;
+  deliveryMinDays?: number;
+  deliveryMaxDays?: number;
+  paidAt?: string | null;
+  shippedAt?: string | null;
+  deliveredAt?: string | null;
+  estimatedDeliveryFrom?: string | null;
+  estimatedDeliveryTo?: string | null;
+  carrier?: string | null;
+  trackingNumber?: string | null;
+  trackingUrl?: string | null;
 }
 export interface Quote {
   currency: string;
@@ -73,6 +83,8 @@ export interface Quote {
   tax: number;
   total: number;
   ruleVersion: string;
+  deliveryMinDays?: number;
+  deliveryMaxDays?: number;
 }
 export const currencies = [
   'USD',

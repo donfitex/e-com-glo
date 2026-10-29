@@ -1,20 +1,24 @@
 'use client';
+import { DeliveryTracking } from './delivery-tracking';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useSession } from './session';
-import { api } from '@/lib/client-api';
+import { api, ApiError } from '@/lib/client-api';
 import { money, type Order, type Page } from '@/lib/types';
 export function Orders({ id }: { id?: string }) {
   const { user, loading } = useSession();
+  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [revision, setRevision] = useState(0);
   useEffect(() => {
     if (!user) return;
     let active = true;
-    setPending(true);
+    if (!id || revision === 0) setPending(true);
     (id
       ? api<Order>(`/orders/${id}`).then((order) => ({
           items: [order],
@@ -24,11 +28,18 @@ export function Orders({ id }: { id?: string }) {
     )
       .then((data) => {
         if (active) {
+          setError('');
           setOrders(data.items);
           setTotal(data.total);
         }
       })
       .catch((e) => {
+        if (active && e instanceof ApiError && e.status === 401) {
+          router.replace(
+            `/login?next=${encodeURIComponent(id ? `/account/orders/${id}` : '/account/orders')}`,
+          );
+          return;
+        }
         if (active) setError(e.message);
       })
       .finally(() => {
@@ -37,7 +48,23 @@ export function Orders({ id }: { id?: string }) {
     return () => {
       active = false;
     };
-  }, [user, id, page]);
+  }, [user, id, page, revision, router]);
+  const terminal = orders.some((order) =>
+    ['DELIVERED', 'CANCELLED'].includes(order.status),
+  );
+  useEffect(() => {
+    if (!id || !user || terminal) return;
+    const refresh = () => {
+      if (document.visibilityState === 'visible')
+        setRevision((value) => value + 1);
+    };
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [id, user, terminal]);
   if (loading) return <div className="shell page">Loading…</div>;
   if (!user)
     return (
@@ -55,7 +82,16 @@ export function Orders({ id }: { id?: string }) {
       </div>
       <div className="page-heading">
         <span className="eyebrow muted">YOUR GOOD FINDS</span>
-        <h1>{id ? 'Your order.' : 'Orders & tracking.'}</h1>
+        <h1>{id ? 'Track your order.' : 'Orders & tracking.'}</h1>
+        {id && (
+          <button
+            className="button outline"
+            onClick={() => setRevision((value) => value + 1)}
+            disabled={pending}
+          >
+            Refresh tracking
+          </button>
+        )}
       </div>
       {error && (
         <div className="notice error" role="alert">
@@ -81,6 +117,7 @@ export function Orders({ id }: { id?: string }) {
               </span>
               <strong>{money(order.total, order.currency)}</strong>
             </div>
+            <DeliveryTracking order={order} compact={!id} />
             {id ? (
               <>
                 <div className="order-details">
@@ -125,7 +162,7 @@ export function Orders({ id }: { id?: string }) {
               </>
             ) : (
               <Link className="text-link" href={`/account/orders/${order.id}`}>
-                View order details →
+                Track order & view details →
               </Link>
             )}
           </article>

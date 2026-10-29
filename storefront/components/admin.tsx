@@ -1,4 +1,5 @@
 'use client';
+import { OrderFulfillment } from './order-fulfillment';
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import Link from 'next/link';
 import { ProductImageUpload } from './product-image-upload';
@@ -12,13 +13,6 @@ import {
   type Page,
   type Order,
 } from '@/lib/types';
-const transitions: Record<string, string[]> = {
-  PENDING: ['CANCELLED'],
-  CONFIRMED: ['SHIPPED'],
-  SHIPPED: ['DELIVERED'],
-  DELIVERED: [],
-  CANCELLED: [],
-};
 export function Admin() {
   const { user, loading } = useSession();
   const [tab, setTab] = useState<'products' | 'categories' | 'orders'>(
@@ -453,7 +447,7 @@ export function Admin() {
           </div>
           <div className="admin-list">
             {orders.map((order) => (
-              <div className="admin-row" key={order.id}>
+              <div className="admin-row admin-order-row" key={order.id}>
                 <div>
                   <h3>
                     #{order.id.slice(0, 8).toUpperCase()} ·{' '}
@@ -474,37 +468,7 @@ export function Admin() {
                     {order.status} / {order.paymentStatus}
                   </span>
                 </div>
-                <label>
-                  Update status
-                  <select
-                    aria-label={`Update order ${order.id.slice(0, 8)}`}
-                    disabled={busy}
-                    value=""
-                    onChange={(e) => {
-                      const status = e.target.value;
-                      if (status)
-                        void mutate(
-                          () =>
-                            api(`/admin/orders/${order.id}/status`, {
-                              method: 'PATCH',
-                              body: JSON.stringify({ status }),
-                            }),
-                          'Order status updated.',
-                        );
-                    }}
-                  >
-                    <option value="">Choose next step</option>
-                    {(transitions[order.status] ?? [])
-                      .filter(
-                        (status) =>
-                          status !== 'CANCELLED' ||
-                          order.paymentStatus === 'UNPAID',
-                      )
-                      .map((status) => (
-                        <option key={status}>{status}</option>
-                      ))}
-                  </select>
-                </label>
+                <OrderFulfillment order={order} busy={busy} mutate={mutate} />
               </div>
             ))}
           </div>

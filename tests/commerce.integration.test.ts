@@ -267,6 +267,113 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     expect(options.body.data.paymentCurrencies).toBeNull();
     expect(options.headers['cache-control']).toBe('no-store');
   });
+  test('paid orders expose delivery estimates and only admins can ship and mark delivery', async () => {
+    await db.product.update({ where: { id: productId }, data: { price: 0 } });
+    await add();
+    const created = await checkout();
+    expect(created.status).toBe(201);
+    const order = created.body.data;
+    expect(order.status).toBe('CONFIRMED');
+    expect(order.paidAt).toBeTruthy();
+    expect(
+      new Date(order.estimatedDeliveryFrom).getTime() -
+        new Date(order.paidAt).getTime(),
+    ).toBe(3 * 86400000);
+    expect(
+      new Date(order.estimatedDeliveryTo).getTime() -
+        new Date(order.paidAt).getTime(),
+    ).toBe(7 * 86400000);
+    await request(app)
+      .patch(`/api/v1/admin/orders/${order.id}/shipment`)
+      .set(auth(customer))
+      .send({ carrier: 'Test courier' })
+      .expect(403);
+    await request(app)
+      .get(`/api/v1/orders/${order.id}`)
+      .set(auth(other))
+      .expect(404);
+    await request(app)
+      .patch(`/api/v1/admin/orders/${order.id}/shipment`)
+      .set(auth(admin))
+      .send({ trackingUrl: 'javascript:alert(1)' })
+      .expect(400);
+    await request(app)
+      .patch(`/api/v1/admin/orders/${order.id}/shipment`)
+      .set(auth(admin))
+      .send({ expectedDeliveryDate: '2000-01-01' })
+      .expect(422);
+    const expectedDate = new Date(Date.now() + 5 * 86400000)
+      .toISOString()
+      .slice(0, 10);
+    const details = {
+      carrier: 'Test courier',
+      trackingNumber: 'TRACK-123',
+      trackingUrl: 'https://example.com/track/TRACK-123',
+      expectedDeliveryDate: expectedDate,
+    };
+    await request(app)
+      .patch(`/api/v1/admin/orders/${order.id}/shipment`)
+      .set(auth(admin))
+      .send(details)
+      .expect(200);
+    const shipped = await request(app)
+      .patch(`/api/v1/admin/orders/${order.id}/status`)
+      .set(auth(admin))
+      .send({ status: 'SHIPPED' })
+      .expect(200);
+    expect(shipped.body.data.shippedAt).toBeTruthy();
+    const delivered = await request(app)
+      .patch(`/api/v1/admin/orders/${order.id}/status`)
+      .set(auth(admin))
+      .send({ status: 'DELIVERED' })
+      .expect(200);
+    expect(delivered.body.data.deliveredAt).toBeTruthy();
+    const tracking = await request(app)
+      .get(`/api/v1/orders/${order.id}`)
+      .set(auth(customer))
+      .expect(200);
+    expect(tracking.body.data).toMatchObject({
+      status: 'DELIVERED',
+      carrier: 'Test courier',
+      trackingNumber: 'TRACK-123',
+      deliveredAt: delivered.body.data.deliveredAt,
+    });
+    expect(tracking.body.data.estimatedDeliveryTo.slice(0, 10)).toBe(
+      expectedDate,
+    );
+    await request(app)
+      .patch(`/api/v1/admin/orders/${order.id}/status`)
+      .set(auth(admin))
+      .send({ status: 'DELIVERED' })
+      .expect(409);
+    await request(app)
+      .patch(`/api/v1/admin/orders/${order.id}/shipment`)
+      .set(auth(admin))
+      .send({ carrier: 'Changed after delivery' })
+      .expect(409);
+    expect(
+      await db.auditEvent.count({
+        where: { entityId: order.id, action: 'order.status_changed' },
+      }),
+    ).toBe(2);
+    await db.product.update({
+      where: { id: productId },
+      data: { price: 1999 },
+    });
+    await add();
+    const pending = (await checkout(customer, 'pending-shipment-test')).body
+      .data;
+    await request(app)
+      .patch(`/api/v1/admin/orders/${pending.id}/status`)
+      .set(auth(admin))
+      .send({ status: 'SHIPPED' })
+      .expect(409);
+    await request(app)
+      .patch(`/api/v1/admin/orders/${pending.id}/shipment`)
+      .set(auth(admin))
+      .send({ carrier: 'Test courier' })
+      .expect(409);
+  });
   test('liveness, dependency readiness, headers and safe errors', async () => {
     expect((await request(app).get('/health')).body.service).toBe(
       'E-com Global',
@@ -567,7 +674,15 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     };
     const payments = new PaymentService(db, cache, gateway);
     await payments.webhook(Buffer.from('fixture'), 'fixture');
+    const firstConfirmation = await db.order.findUniqueOrThrow({
+      where: { id: orderId },
+    });
+    expect(firstConfirmation.paidAt).not.toBeNull();
+    expect(firstConfirmation.estimatedDeliveryTo).not.toBeNull();
     await payments.webhook(Buffer.from('fixture'), 'fixture');
+    expect(
+      (await db.order.findUniqueOrThrow({ where: { id: orderId } })).paidAt,
+    ).toEqual(firstConfirmation.paidAt);
     expect(await db.order.findUnique({ where: { id: orderId } })).toMatchObject(
       { status: 'CONFIRMED', paymentStatus: 'PAID' },
     );
