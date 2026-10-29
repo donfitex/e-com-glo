@@ -40,6 +40,7 @@ export function authRouter(
   service: AuthService,
   guard: RequestHandler,
   limit: RequestHandler,
+  loginLimit: RequestHandler = limit,
 ) {
   const router = Router();
   router.use((_req, res, next) => {
@@ -61,7 +62,7 @@ export function authRouter(
   );
   router.post(
     '/login',
-    limit,
+    loginLimit,
     endpoint(async (req, res) =>
       res.json({ data: await service.login(credentials.parse(req.body)) }),
     ),

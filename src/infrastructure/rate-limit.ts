@@ -1,4 +1,4 @@
-import { RequestHandler } from 'express';
+import { RequestHandler, Request } from 'express';
 import { createHash } from 'node:crypto';
 import { Redis } from './cache';
 export interface RateLimiter {
@@ -25,13 +25,15 @@ export function rateLimit(
   limiter: RateLimiter,
   scope: string,
   limit: number,
+  windowSeconds = 60,
+  identity?: (request: Request) => string,
 ): RequestHandler {
   return (req, res, next) => {
     const ip = createHash('sha256')
-      .update(req.ip ?? 'unknown')
+      .update(identity ? identity(req) : (req.ip ?? 'unknown'))
       .digest('hex');
     limiter
-      .consume(`${scope}:${ip}`, limit, 60)
+      .consume(`${scope}:${ip}`, limit, windowSeconds)
       .then((result) => {
         if (result.allowed) return next();
         res.setHeader('Retry-After', result.retryAfter);

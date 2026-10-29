@@ -1,4 +1,8 @@
-import { ScryptHasher, JwtTokens } from '../src/modules/auth/security';
+import {
+  ScryptHasher,
+  BcryptHasher,
+  JwtTokens,
+} from '../src/modules/auth/security';
 import { configSchema } from '../src/config';
 const secret = 'test-only-secret-that-is-at-least-32-characters';
 describe('identity security', () => {
@@ -34,4 +38,31 @@ describe('identity security', () => {
       }),
     ).toThrow();
   });
+});
+
+test('versioned bcrypt supports legacy hashes and does not truncate long Unicode passwords', async () => {
+  const hasher = new BcryptHasher();
+  const password = '🔐'.repeat(30);
+  const hash = await hasher.hash(password);
+  expect(hash).toMatch(/^bcrypt-sha256:v1:\$2/);
+  expect(await hasher.verify(password, hash)).toBe(true);
+  expect(await hasher.verify(password + 'different-suffix', hash)).toBe(false);
+  const legacy = await new ScryptHasher().hash('legacy-password-123');
+  expect(await hasher.verify('legacy-password-123', legacy)).toBe(true);
+  expect(hasher.needsRehash(legacy)).toBe(true);
+  expect(hasher.needsRehash(hash)).toBe(false);
+});
+
+test('expired access tokens are rejected', () => {
+  const tokens = new JwtTokens(secret);
+  const token = tokens.sign({
+    sub: 'e241484c-f388-4d9b-9cd7-f35ccab53280',
+    role: 'CUSTOMER',
+  });
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 901000);
+  try {
+    expect(() => tokens.verify(token)).toThrow('expired');
+  } finally {
+    clock.mockRestore();
+  }
 });

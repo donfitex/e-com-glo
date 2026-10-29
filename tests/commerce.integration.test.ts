@@ -10,7 +10,11 @@ import pino from 'pino';
 import { createApp } from '../src/app';
 import { CatalogCache } from '../src/infrastructure/cache';
 import { RedisRateLimiter } from '../src/infrastructure/rate-limit';
-import { JwtTokens, ScryptHasher } from '../src/modules/auth/security';
+import {
+  JwtTokens,
+  ScryptHasher,
+  BcryptHasher,
+} from '../src/modules/auth/security';
 import { configSchema } from '../src/config';
 const enabled = Boolean(process.env.TEST_DATABASE_URL);
 const suite = enabled ? describe : describe.skip;
@@ -405,6 +409,67 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     expect(new Date(record.timestamp).toISOString()).toBe(record.timestamp);
     expect(typeof record.durationMs).toBe('number');
     expect(lines.join('')).not.toMatch(/private-token|never-log-this/);
+  });
+  test('login throttles each normalized account to five attempts per fifteen minutes', async () => {
+    for (let attempt = 0; attempt < 5; attempt++)
+      await request(app)
+        .post('/api/v1/auth/login')
+        .send({
+          email: 'buyer@example.com',
+          password: 'incorrect-password-123',
+        })
+        .expect(401);
+    const blocked = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'BUYER@example.com', password: 'long-password-123' })
+      .expect(429);
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(800);
+    await request(app)
+      .post('/api/v1/auth/login')
+      .send({
+        email: 'different@example.com',
+        password: 'incorrect-password-123',
+      })
+      .expect(401);
+  });
+  test('a successful legacy login upgrades its stored hash without changing credentials', async () => {
+    const secured = createApp(config, {
+      db,
+      cache,
+      limiter,
+      tokens,
+      passwords: new BcryptHasher(),
+      logger: pino({ level: 'silent' }),
+      ready: async () => {},
+    });
+    await request(secured)
+      .post('/api/v1/auth/login')
+      .send({ email: 'buyer@example.com', password: 'long-password-123' })
+      .expect(200);
+    const account = await db.user.findUniqueOrThrow({
+      where: { id: customerId },
+    });
+    expect(account.passwordHash).toMatch(/^bcrypt-sha256:v1:/);
+    expect(
+      await new BcryptHasher().verify(
+        'long-password-123',
+        account.passwordHash,
+      ),
+    ).toBe(true);
+  });
+  test('CORS exposes responses only to configured browser origins', async () => {
+    const allowed = await request(app)
+      .get('/health')
+      .set('Origin', 'https://shop.example')
+      .expect(200);
+    expect(allowed.headers['access-control-allow-origin']).toBe(
+      'https://shop.example',
+    );
+    const denied = await request(app)
+      .get('/health')
+      .set('Origin', 'https://untrusted.example')
+      .expect(200);
+    expect(denied.headers['access-control-allow-origin']).toBeUndefined();
   });
   test('liveness, dependency readiness, headers and safe errors', async () => {
     expect((await request(app).get('/health')).body.service).toBe(

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import { ScryptHasher } from '../src/modules/auth/security';
+import { BcryptHasher } from '../src/modules/auth/security';
 const db = new PrismaClient();
 async function main() {
   const input = z
@@ -22,7 +22,7 @@ async function main() {
       );
     return;
   }
-  const passwordHash = await new ScryptHasher().hash(input.ADMIN_PASSWORD);
+  const passwordHash = await new BcryptHasher().hash(input.ADMIN_PASSWORD);
   await db.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {

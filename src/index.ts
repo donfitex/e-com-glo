@@ -9,7 +9,7 @@ import { loadConfig } from './config';
 import { createApp } from './app';
 import { CatalogCache } from './infrastructure/cache';
 import { RedisRateLimiter } from './infrastructure/rate-limit';
-import { JwtTokens, ScryptHasher } from './modules/auth/security';
+import { JwtTokens, BcryptHasher } from './modules/auth/security';
 async function main() {
   const config = loadConfig();
   const logger = pino({ level: config.LOG_LEVEL });
@@ -59,7 +59,7 @@ async function main() {
     cache: new CatalogCache(redis),
     limiter: new RedisRateLimiter(redis),
     tokens: new JwtTokens(config.JWT_SECRET),
-    passwords: new ScryptHasher(),
+    passwords: new BcryptHasher(),
     logger,
     ready: async () => {
       await Promise.all([db.$queryRaw`SELECT 1`, redis.ping()]);

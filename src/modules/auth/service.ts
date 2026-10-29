@@ -57,6 +57,12 @@ export class AuthService {
         'Invalid email or password',
       );
     }
+    if (this.passwords.needsRehash?.(user.passwordHash)) {
+      await this.db.user.updateMany({
+        where: { id: user.id, passwordHash: user.passwordHash },
+        data: { passwordHash: await this.passwords.hash(data.password) },
+      });
+    }
     const { passwordHash: _, ...safe } = user;
     void _;
     return {

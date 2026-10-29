@@ -1,5 +1,7 @@
+import bcrypt from 'bcryptjs';
 import {
   randomBytes,
+  createHash,
   scrypt as scryptCallback,
   timingSafeEqual,
 } from 'node:crypto';
@@ -11,6 +13,7 @@ const scrypt = promisify(scryptCallback);
 export interface PasswordHasher {
   hash(password: string): Promise<string>;
   verify(password: string, hash: string): Promise<boolean>;
+  needsRehash?(hash: string): boolean;
 }
 export class ScryptHasher implements PasswordHasher {
   async hash(password: string) {
@@ -26,6 +29,31 @@ export class ScryptHasher implements PasswordHasher {
     return (
       actual.length === expected.length && timingSafeEqual(actual, expected)
     );
+  }
+}
+// Versioned prehashing preserves full Unicode/long passwords beyond bcrypt's 72-byte limit.
+export class BcryptHasher implements PasswordHasher {
+  private readonly prefix = 'bcrypt-sha256:v1:';
+  private digest(password: string) {
+    return createHash('sha256').update(password, 'utf8').digest('base64');
+  }
+  async hash(password: string) {
+    return this.prefix + (await bcrypt.hash(this.digest(password), 12));
+  }
+  async verify(password: string, hash: string) {
+    if (!hash.startsWith(this.prefix))
+      return new ScryptHasher().verify(password, hash);
+    try {
+      return await bcrypt.compare(
+        this.digest(password),
+        hash.slice(this.prefix.length),
+      );
+    } catch {
+      return false;
+    }
+  }
+  needsRehash(hash: string) {
+    return !hash.startsWith(this.prefix);
   }
 }
 const identity = z.object({

@@ -116,6 +116,11 @@ export function createApp(config: Config, deps: Dependencies) {
       new AuthService(deps.db, deps.passwords, deps.tokens),
       guard,
       rateLimit(deps.limiter, 'auth', 10),
+      rateLimit(deps.limiter, 'auth-login', 5, 900, (req) =>
+        typeof req.body?.email === 'string'
+          ? req.body.email.trim().toLowerCase().slice(0, 254)
+          : (req.ip ?? 'unknown'),
+      ),
     ),
   );
   app.get('/api/v1/checkout/options', (_req, res) => {
