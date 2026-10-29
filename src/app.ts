@@ -23,7 +23,9 @@ import { orderRouter } from './modules/orders/http';
 import { productQuery } from './modules/catalog/schemas';
 import { endpoint } from './shared/http';
 import { AppError } from './shared/errors';
+import { SearchService, SemanticSearch } from './modules/search/service';
 export interface Dependencies {
+  semantic?: SemanticSearch;
   db: Database;
   cache: Cache;
   limiter: RateLimiter;
@@ -97,7 +99,7 @@ export function createApp(config: Config, deps: Dependencies) {
       const query = productQuery.parse(req.query);
       if (!query.q)
         throw new AppError(400, 'QUERY_REQUIRED', 'Search requires q');
-      res.json({ data: await catalog.list(query), meta: { mode: 'text' } });
+      res.json(await new SearchService(catalog, deps.semantic).search(query));
     }),
   );
   app.use('/api/v1/cart', cartRouter(new CartService(deps.db, pricing), guard));

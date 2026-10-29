@@ -150,3 +150,7 @@ vite.config.ts.timestamp-*
 
 # Local implementation scratch files
 work/
+
+# Optional local embedding service
+__pycache__/
+*.pyc

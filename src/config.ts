@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { z } from 'zod';
 export const configSchema = z.object({
+  SEMANTIC_SEARCH_URL: z.string().url().optional(),
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),

@@ -1,3 +1,5 @@
+import { LocalEmbeddings } from './modules/search/embeddings';
+import { PgVectorSearch } from './modules/search/vector-search';
 import { PrismaClient } from '@prisma/client';
 import { createClient } from 'redis';
 import pino from 'pino';
@@ -20,6 +22,13 @@ async function main() {
   await redis.connect();
   const app = createApp(config, {
     db,
+    semantic: config.SEMANTIC_SEARCH_URL
+      ? new PgVectorSearch(
+          db,
+          new LocalEmbeddings(config.SEMANTIC_SEARCH_URL),
+          new CatalogCache(redis),
+        )
+      : undefined,
     cache: new CatalogCache(redis),
     limiter: new RedisRateLimiter(redis),
     tokens: new JwtTokens(config.JWT_SECRET),
