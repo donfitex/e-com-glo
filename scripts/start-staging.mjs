@@ -19,9 +19,9 @@ function child(args, env = serviceEnv) {
   processChild.once('exit', () => children.delete(processChild));
   return processChild;
 }
-async function command(args) {
+async function command(args, env = serviceEnv) {
   await new Promise((resolve, reject) => {
-    const task = child(args);
+    const task = child(args, env);
     task.on('error', reject);
     task.on('exit', (code) =>
       code === 0
@@ -48,7 +48,10 @@ function shutdown(code = 0) {
 process.on('SIGTERM', () => shutdown());
 process.on('SIGINT', () => shutdown());
 try {
-  await command(['node_modules/prisma/build/index.js', 'migrate', 'deploy']);
+  await command(['node_modules/prisma/build/index.js', 'migrate', 'deploy'], {
+    ...serviceEnv,
+    DATABASE_URL: process.env.DATABASE_URL_UNPOOLED || serviceEnv.DATABASE_URL,
+  });
   await command(['node_modules/tsx/dist/cli.mjs', 'prisma/seed.ts']);
   if (process.env.ALLOW_DEMO_SEED === 'true')
     await command(['node_modules/tsx/dist/cli.mjs', 'scripts/seed-demo.ts']);

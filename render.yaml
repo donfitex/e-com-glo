@@ -15,9 +15,9 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: DATABASE_URL
-        fromDatabase:
-          name: e-com-global-staging-db
-          property: connectionString
+        sync: false
+      - key: DATABASE_URL_UNPOOLED
+        sync: false
       - key: REDIS_URL
         fromService:
           type: keyvalue
@@ -32,11 +32,4 @@ services:
     plan: free
     region: oregon
     maxmemoryPolicy: noeviction
-    ipAllowList: []
-databases:
-  - name: e-com-global-staging-db
-    plan: free
-    region: oregon
-    databaseName: ecom_staging
-    user: ecom
     ipAllowList: []
