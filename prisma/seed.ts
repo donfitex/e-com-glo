@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 const db = new PrismaClient();
 async function main() {
@@ -19,4 +20,11 @@ async function main() {
     });
   // No default administrator or shared password. Provision administrators explicitly.
 }
-main().finally(() => db.$disconnect());
+main()
+  .catch(() => {
+    process.stderr.write(
+      'Catalog seeding failed; verify database configuration.\n',
+    );
+    process.exitCode = 1;
+  })
+  .finally(() => db.$disconnect());
