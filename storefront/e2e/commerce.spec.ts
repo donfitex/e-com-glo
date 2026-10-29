@@ -68,6 +68,8 @@ test('customer journey: discover, register, add to bag, quote and place unpaid o
     page.getByRole('heading', { name: 'Your shopping bag.' }),
   ).toBeVisible();
   await page.getByRole('link', { name: 'Continue to checkout' }).click();
+  await page.getByLabel('Contact email').fill(`contact-${stamp}@example.com`);
+  await page.getByLabel('Phone number').fill('+1 202 555 0123');
   await page
     .getByLabel('Address line 1', { exact: true })
     .fill('10 Example Road');
@@ -95,6 +97,10 @@ test('customer journey: discover, register, add to bag, quote and place unpaid o
   await expect(
     page.getByText('Everyday wireless headphones × 1'),
   ).toBeVisible();
+  await expect(
+    page.getByText(`contact-${stamp}@example.com`, { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByText('+12025550123', { exact: false })).toBeVisible();
   await page.goto('/admin');
   await expect(
     page.getByText('Administrator access is required.'),

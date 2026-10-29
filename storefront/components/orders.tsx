@@ -107,6 +107,17 @@ export function Orders({ id }: { id?: string }) {
                     {order.shippingAddress.line1}, {order.shippingAddress.city},{' '}
                     {order.shippingAddress.country}
                   </p>
+                  {order.shippingAddress.email && (
+                    <p>
+                      <strong>Contact email:</strong>{' '}
+                      {order.shippingAddress.email}
+                    </p>
+                  )}
+                  {order.shippingAddress.phone && (
+                    <p>
+                      <strong>Phone:</strong> {order.shippingAddress.phone}
+                    </p>
+                  )}
                   <p>
                     Payment: <strong>{order.paymentStatus ?? 'UNPAID'}</strong>
                   </p>

@@ -101,6 +101,8 @@ Example checkout body (prices and totals are deliberately rejected):
 {
   "shippingAddress": {
     "name": "Global Buyer",
+    "email": "buyer@example.com",
+    "phone": "+2348012345678",
     "line1": "10 Market Road",
     "city": "Lagos",
     "postalCode": "100001",
@@ -260,3 +262,5 @@ For the current staging deployment, use these Paystack **test-mode** dashboard v
 - Callback: `https://e-com-global-staging.onrender.com/checkout/payment`
 
 Each initialization sends its own order-specific callback, adding `?order=<id>`. The callback alone never confirms payment; signed notifications plus server-side transaction verification remain required. Redirect browser tests simulate the Paystack destination; authenticated merchant sandbox payment verification still requires the configured test secret and a real sandbox checkout.
+
+Checkout requires a contact email and international phone number alongside the shipping address. Email is prefilled from the signed-in account and can be changed for that order. Phone numbers require a leading country code (for example `+2348012345678`); spaces, parentheses and hyphens are normalized before storage. The saved contact email is sent to Paystack for the transaction. Older orders without contact fields remain readable and use the account email for payment initialization. Order contact details are visible only to the order owner and authorized administrators.

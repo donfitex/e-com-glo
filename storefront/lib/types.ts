@@ -44,6 +44,8 @@ export interface Cart {
 }
 export interface Address {
   name: string;
+  email?: string;
+  phone?: string;
   line1: string;
   line2?: string;
   city: string;

@@ -62,6 +62,8 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     productId: string;
   const shippingAddress = {
     name: 'Global Buyer',
+    email: 'delivery@example.com',
+    phone: '+2348012345678',
     line1: '10 Market Road',
     city: 'Lagos',
     postalCode: '100001',
@@ -220,6 +222,41 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
       .set('Idempotency-Key', key)
       .send({ shippingAddress });
   }
+  test('checkout requires and persists normalized delivery contact details', async () => {
+    await add();
+    for (const contact of [
+      { email: undefined },
+      { email: 'invalid' },
+      { phone: undefined },
+      { phone: '08012345678' },
+    ]) {
+      await request(app)
+        .post('/api/v1/orders/quote')
+        .set(auth(customer))
+        .send({ shippingAddress: { ...shippingAddress, ...contact } })
+        .expect(400);
+    }
+    const order = await request(app)
+      .post('/api/v1/orders/checkout')
+      .set(auth(customer))
+      .set('Idempotency-Key', 'delivery-contact-test')
+      .send({
+        shippingAddress: {
+          ...shippingAddress,
+          email: ' DELIVERY@EXAMPLE.COM ',
+          phone: '+234 (801) 234-5678',
+        },
+      })
+      .expect(201);
+    expect(order.body.data.shippingAddress).toMatchObject({
+      email: 'delivery@example.com',
+      phone: '+2348012345678',
+    });
+    expect(
+      (await db.order.findUniqueOrThrow({ where: { id: order.body.data.id } }))
+        .shippingAddress,
+    ).toMatchObject({ email: 'delivery@example.com', phone: '+2348012345678' });
+  });
   test('liveness, dependency readiness, headers and safe errors', async () => {
     expect((await request(app).get('/health')).body.service).toBe(
       'E-com Global',
@@ -644,7 +681,7 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
       { url: 'https://checkout.paystack.com/initialized' },
     ]);
     expect(create).toHaveBeenCalledTimes(1);
-    expect(create.mock.calls[0]?.[0].email).toBe('buyer@example.com');
+    expect(create.mock.calls[0]?.[0].email).toBe('delivery@example.com');
     expect(await db.order.findUnique({ where: { id: orderId } })).toMatchObject(
       { paymentProvider: 'paystack', paymentReference: `ecom-${orderId}` },
     );

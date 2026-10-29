@@ -54,6 +54,10 @@ test('placing a payable order redirects directly to Paystack hosted checkout', a
     }),
   );
   await page.goto('/checkout');
+  await page.getByLabel('Phone number').fill('+2348012345678');
+  await expect(page.getByLabel('Contact email')).toHaveValue(
+    'test@example.com',
+  );
   await page
     .getByLabel('Address line 1', { exact: true })
     .fill('10 Market Road');

@@ -464,6 +464,12 @@ export function Admin() {
                     {order.shippingAddress.country} ·{' '}
                     {money(order.total, order.currency)}
                   </p>
+                  {order.shippingAddress.email && (
+                    <p>Contact: {order.shippingAddress.email}</p>
+                  )}
+                  {order.shippingAddress.phone && (
+                    <p>Phone: {order.shippingAddress.phone}</p>
+                  )}
                   <span className="status">
                     {order.status} / {order.paymentStatus}
                   </span>

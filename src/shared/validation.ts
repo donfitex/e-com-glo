@@ -19,6 +19,21 @@ export const pagination = z.object({
 export const address = z
   .object({
     name: z.string().trim().min(1).max(120),
+    email: z.string().trim().toLowerCase().email().max(254),
+    phone: z
+      .string()
+      .trim()
+      .max(40)
+      .regex(/^\+[0-9 ()-]+$/)
+      .transform((value) => value.replace(/[ ()-]/g, ''))
+      .pipe(
+        z
+          .string()
+          .regex(
+            /^\+[1-9]\d{6,14}$/,
+            'Use an international phone number, for example +2348012345678',
+          ),
+      ),
     line1: z.string().trim().min(1).max(200),
     line2: z.string().trim().max(200).optional(),
     city: z.string().trim().min(1).max(100),

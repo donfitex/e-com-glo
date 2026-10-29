@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { address } from '../../shared/validation';
 import { Prisma } from '@prisma/client';
 import { Database, serializable } from '../../infrastructure/database';
 import { Cache } from '../../infrastructure/cache';
@@ -46,9 +48,12 @@ export class PaymentService {
         );
         if (order.paymentReference && order.paymentAuthorizationUrl)
           return { url: order.paymentAuthorizationUrl };
+        const contact = z
+          .object({ email: address.shape.email })
+          .safeParse(order.shippingAddress);
         const session = await gateway.create({
           ...order,
-          email: order.user.email,
+          email: contact.success ? contact.data.email : order.user.email,
         });
         const changed = await tx.order.updateMany({
           where: {

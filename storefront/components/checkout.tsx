@@ -144,6 +144,34 @@ export function Checkout() {
                 autoComplete="shipping name"
               />
             </label>
+            <div className="form-columns">
+              <label>
+                Contact email
+                <input
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  maxLength={254}
+                  defaultValue={user.email}
+                />
+              </label>
+              <label>
+                Phone number
+                <input
+                  name="phone"
+                  type="tel"
+                  autoComplete="tel"
+                  required
+                  maxLength={40}
+                  placeholder="+234 801 234 5678"
+                  aria-describedby="checkout-phone-help"
+                />
+              </label>
+            </div>
+            <small id="checkout-phone-help">
+              Include your country code, for example +234 for Nigeria.
+            </small>
             <label>
               Address line 1
               <input
