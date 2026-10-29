@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import Link from 'next/link';
+import { ProductImageUpload } from './product-image-upload';
 import { api } from '@/lib/client-api';
 import { useSession } from './session';
 import {
@@ -27,9 +28,11 @@ export function Admin() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [editing, setEditing] = useState<Product | null>(null);
+  const [formVersion, setFormVersion] = useState(0);
   const [categoryEdit, setCategoryEdit] = useState<Category | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [savedLink, setSavedLink] = useState('');
   const [busy, setBusy] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -65,6 +68,7 @@ export function Admin() {
     setBusy(true);
     setError('');
     setMessage('');
+    setSavedLink('');
     try {
       await action();
       setMessage(success);
@@ -92,20 +96,35 @@ export function Admin() {
       active: values.get('active') === 'on',
       attributes: {
         ...(editing?.attributes ?? {}),
-        illustration: String(values.get('illustration')),
       },
     };
     if (
-      await mutate(
-        () =>
-          api(`/products${editing ? `/${editing.id}` : ''}`, {
+      await mutate(async () => {
+        const photo = values.get('photo');
+        if (photo instanceof File && photo.size) {
+          const uploaded = await api<{ url: string }>('/admin/images', {
+            method: 'POST',
+            body: photo,
+            headers: { 'Content-Type': photo.type },
+          });
+          payload.attributes.imageUrl = uploaded.url;
+        }
+        const saved = await api<Product>(
+          `/products${editing ? `/${editing.id}` : ''}`,
+          {
             method: editing ? 'PATCH' : 'POST',
             body: JSON.stringify(payload),
-          }),
-        'Product saved.',
-      )
+          },
+        );
+        if (saved.active)
+          setSavedLink(
+            `/shop?category=${encodeURIComponent(categories.find((c) => c.id === saved.categoryId)?.slug ?? '')}&currency=${saved.currency}`,
+          );
+        return saved;
+      }, 'Product saved.')
     ) {
       setEditing(null);
+      setFormVersion((version) => version + 1);
       form.reset();
     }
   }
@@ -168,6 +187,11 @@ export function Admin() {
       {message && (
         <div className="notice" role="status">
           {message}
+          {savedLink && (
+            <Link className="text-link" href={savedLink} prefetch={false}>
+              View category →
+            </Link>
+          )}
         </div>
       )}
       {tab === 'products' && (
@@ -223,7 +247,7 @@ export function Admin() {
           </div>
           <form
             className="form-card admin-form"
-            key={editing?.id ?? 'new-product'}
+            key={editing?.id ?? `new-product-${formVersion}`}
             onSubmit={saveProduct}
           >
             <h2>{editing ? 'Edit product' : 'Add a good find'}</h2>
@@ -271,7 +295,7 @@ export function Admin() {
                 Currency
                 <select
                   name="currency"
-                  defaultValue={editing?.currency ?? 'USD'}
+                  defaultValue={editing?.currency ?? 'NGN'}
                 >
                   {currencies.map((c) => (
                     <option key={c}>{c}</option>
@@ -312,26 +336,10 @@ export function Admin() {
                 </select>
               </label>
             </div>
-            <label>
-              Product illustration
-              <select
-                name="illustration"
-                defaultValue={editing?.attributes.illustration ?? 'headphones'}
-              >
-                {[
-                  'headphones',
-                  'bag',
-                  'lamp',
-                  'bottle',
-                  'shoes',
-                  'skincare',
-                  'book',
-                  'speaker',
-                ].map((v) => (
-                  <option key={v}>{v}</option>
-                ))}
-              </select>
-            </label>
+            <ProductImageUpload
+              existing={editing?.attributes.imageUrl}
+              required={!editing}
+            />
             <label className="checkbox-label">
               <input
                 name="active"

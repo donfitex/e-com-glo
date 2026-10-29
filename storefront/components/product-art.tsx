@@ -2,6 +2,8 @@ import type { Product } from '@/lib/types';
 export function illustration(
   product: Pick<Product, 'attributes' | 'category'>,
 ) {
+  const image = product.attributes?.imageUrl;
+  if (image && /^\/api\/media\/[0-9a-f-]{36}$/.test(image)) return image;
   const known = [
     'headphones',
     'bag',
@@ -38,7 +40,7 @@ export function ProductArt({
   return (
     <img
       className={`product-art ${className}`}
-      src={`/products/${kind}.svg`}
+      src={kind.startsWith('/api/media/') ? kind : `/products/${kind}.svg`}
       alt={alt}
       loading="lazy"
     />

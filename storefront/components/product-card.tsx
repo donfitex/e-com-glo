@@ -7,7 +7,7 @@ export function ProductCard({ product }: { product: Product }) {
   return (
     <article className="product-card">
       <Link
-        className={`product-image art-${illustration(product)}`}
+        className={`product-image art-${illustration(product).startsWith('/') ? 'photo' : illustration(product)}`}
         href={`/products/${product.id}`}
       >
         <ProductArt kind={illustration(product)} alt={product.name} />

@@ -1,10 +1,11 @@
+import { revalidatePath } from 'next/cache';
 import { limitedBody, BodyTooLarge } from '@/lib/request-body';
 import { NextRequest, NextResponse } from 'next/server';
 import { apiOrigin } from '@/lib/server-api';
 export const runtime = 'nodejs';
 const COOKIE = 'ecom_session';
 const allowed =
-  /^(auth\/(login|register|me|logout)|categories(?:\/[0-9a-f-]+)?|products(?:\/[0-9a-f-]+)?|search|cart(?:\/items(?:\/[0-9a-f-]+)?)?|orders(?:\/(?:preview|quote|checkout|[0-9a-f-]+(?:\/payment)?))?|admin\/(?:orders(?:\/[0-9a-f-]+\/status)?|products))$/;
+  /^(auth\/(login|register|me|logout)|categories(?:\/[0-9a-f-]+)?|products(?:\/[0-9a-f-]+)?|search|cart(?:\/items(?:\/[0-9a-f-]+)?)?|orders(?:\/(?:preview|quote|checkout|[0-9a-f-]+(?:\/payment)?))?|admin\/(?:images|orders(?:\/[0-9a-f-]+\/status)?|products))$/;
 async function proxy(
   req: NextRequest,
   context: { params: Promise<{ path: string[] }> },
@@ -35,15 +36,27 @@ async function proxy(
     return res;
   }
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    'Content-Type':
+      path === 'admin/images'
+        ? (req.headers.get('content-type') ?? 'application/octet-stream')
+        : 'application/json',
   };
   const token = req.cookies.get(COOKIE)?.value;
   if (token) headers.Authorization = `Bearer ${token}`;
   const key = req.headers.get('idempotency-key');
   if (key) headers['Idempotency-Key'] = key;
   try {
-    const body = req.method === 'GET' ? undefined : await limitedBody(req);
-    if (body && body.byteLength > 65536)
+    const body =
+      req.method === 'GET'
+        ? undefined
+        : await limitedBody(
+            req,
+            path === 'admin/images' ? 3 * 1024 * 1024 : 65536,
+          );
+    if (
+      body &&
+      body.byteLength > (path === 'admin/images' ? 3 * 1024 * 1024 : 65536)
+    )
       return NextResponse.json(
         { error: { message: 'Request exceeds size limit' } },
         { status: 413 },
@@ -61,6 +74,22 @@ async function proxy(
     );
     if (upstream.status === 204) return new NextResponse(null, { status: 204 });
     const payload = await upstream.json();
+    if (
+      upstream.status === 401 &&
+      !['auth/login', 'auth/register'].includes(path)
+    ) {
+      payload.error = {
+        code: 'SESSION_EXPIRED',
+        message: 'Your session has expired. Sign in again to continue.',
+      };
+    }
+    if (
+      upstream.ok &&
+      req.method !== 'GET' &&
+      /^(products|categories)(\/|$)/.test(path)
+    ) {
+      revalidatePath('/', 'layout');
+    }
     let accessToken: string | undefined;
     if (upstream.ok && ['auth/login', 'auth/register'].includes(path)) {
       accessToken = payload.data.accessToken;

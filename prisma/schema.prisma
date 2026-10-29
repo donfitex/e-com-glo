@@ -125,3 +125,10 @@ model PaymentEvent {
  createdAt DateTime @default(now())
  @@index([orderId])
 }
+
+model ProductImage {
+ id String @id @default(uuid()) @db.Uuid
+ data Bytes
+ contentType String
+ createdAt DateTime @default(now())
+}

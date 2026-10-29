@@ -2477,3 +2477,58 @@ textarea::placeholder {
   background: #253e2b;
   color: #b9dcad;
 }
+/* Shared text and surfaces must remain readable in customer and admin flows. */
+button {
+  color: inherit;
+}
+.upload-preview {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-top: 12px;
+  background: var(--soft);
+}
+.art-photo .product-art {
+  object-fit: cover;
+  padding: 0;
+}
+[data-theme='dark'] .account-card {
+  background: var(--surface);
+  border-color: var(--line);
+}
+[data-theme='dark'] .account-card > svg,
+[data-theme='dark'] .form-card small,
+[data-theme='dark'] .detail-price small,
+[data-theme='dark'] .product-price span,
+[data-theme='dark'] .detail-benefits span,
+[data-theme='dark'] .auth-assurance,
+[data-theme='dark'] .summary-row,
+[data-theme='dark'] .order-heading small,
+[data-theme='dark'] .breadcrumb,
+[data-theme='dark'] .category-card > svg {
+  color: var(--muted);
+}
+[data-theme='dark'] .availability,
+[data-theme='dark'] .success {
+  color: #b9dcad;
+}
+[data-theme='dark'] .form-error {
+  color: #f0b59c;
+}
+[data-theme='dark'] .stock-badge {
+  background: #1c2922ed;
+  color: var(--ink);
+}
+[data-theme='dark'] .outline {
+  border-color: #6c8272;
+}
+[data-theme='dark'] .skeleton {
+  background: linear-gradient(100deg, #233329 30%, #35463b 45%, #233329 60%);
+  background-size: 200% 100%;
+}
+[data-theme='dark'] .editorial-copy .light {
+  background: #f5f5e9;
+  color: #183f35;
+}

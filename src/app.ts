@@ -1,3 +1,5 @@
+import { ProductImages } from './modules/media/service';
+import { mediaRouter } from './modules/media/http';
 import { CheckoutPolicy } from './modules/checkout/policy';
 import { PaymentService } from './modules/payments/service';
 import { PaymentGateway } from './modules/payments/gateway';
@@ -75,6 +77,14 @@ export function createApp(config: Config, deps: Dependencies) {
       await payments.webhook(req.body as Buffer, signature);
       res.json({ received: true });
     }),
+  );
+  app.use(
+    '/api/v1',
+    mediaRouter(
+      new ProductImages(deps.db),
+      authenticate(deps.tokens),
+      rateLimit(deps.limiter, 'image-upload', 20),
+    ),
   );
   app.use(express.json({ limit: '64kb' }));
   app.get('/health', (_req, res) =>

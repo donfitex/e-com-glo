@@ -1,11 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { api } from '@/lib/client-api';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { launchPaystack } from '@/lib/payments';
+import { api, ApiError } from '@/lib/client-api';
 import { money, type Order } from '@/lib/types';
 export function Payment() {
   const params = useSearchParams();
+  const router = useRouter();
   const id = params.get('order');
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState('');
@@ -29,6 +31,12 @@ export function Payment() {
         )
           timer = setTimeout(() => void refresh(), 5000);
       } catch (e) {
+        if (e instanceof ApiError && e.status === 401 && active) {
+          router.replace(
+            `/login?next=${encodeURIComponent(`/checkout/payment?order=${id}`)}`,
+          );
+          return;
+        }
         if (active)
           setError(
             e instanceof Error
@@ -42,12 +50,18 @@ export function Payment() {
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [id, returned]);
+  }, [id, returned, router]);
   async function refreshStatus() {
     setError('');
     try {
       setOrder(await api<Order>(`/orders/${id}`));
     } catch (e) {
+      if (e instanceof ApiError && e.status === 401) {
+        router.replace(
+          `/login?next=${encodeURIComponent(`/checkout/payment?order=${id}`)}`,
+        );
+        return;
+      }
       setError(
         e instanceof Error ? e.message : 'Could not refresh payment status.',
       );
@@ -57,18 +71,14 @@ export function Payment() {
     setBusy(true);
     setError('');
     try {
-      const { url } = await api<{ url: string }>(`/orders/${id}/payment`, {
-        method: 'POST',
-        body: '{}',
-      });
-      const target = new URL(url);
-      if (
-        target.protocol !== 'https:' ||
-        target.hostname !== 'checkout.paystack.com'
-      )
-        throw new Error('Invalid payment destination');
-      window.location.assign(target.href);
+      await launchPaystack(id!);
     } catch (e) {
+      if (e instanceof ApiError && e.status === 401) {
+        router.replace(
+          `/login?next=${encodeURIComponent(`/checkout/payment?order=${id}`)}`,
+        );
+        return;
+      }
       setError(e instanceof Error ? e.message : 'Could not start payment.');
       setBusy(false);
     }
@@ -84,6 +94,12 @@ export function Payment() {
         </h1>
         {order ? (
           <>
+            {params.has('retry') && (
+              <div className="notice" role="status">
+                Your order is saved. Payment could not be opened. Use the button
+                below to retry.
+              </div>
+            )}
             <p>Order #{order.id.slice(0, 8).toUpperCase()}</p>
             <div className="summary-total">
               <span>Total</span>

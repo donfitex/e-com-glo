@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import sharp from 'sharp';
 import { PrismaClient } from '@prisma/client';
 import { ScryptHasher } from '../../src/modules/auth/security';
 const database = process.env.E2E_DATABASE_URL;
@@ -151,8 +152,34 @@ test('administrator can create categories/products and update inventory', async 
   await page
     .getByLabel('Category', { exact: true })
     .selectOption({ label: `Browser Category ${stamp}` });
+  await page.getByLabel('Product photo', { exact: true }).setInputFiles({
+    name: 'merchant-photo.png',
+    mimeType: 'image/png',
+    buffer: await sharp({
+      create: { width: 80, height: 80, channels: 3, background: '#336655' },
+    })
+      .png()
+      .toBuffer(),
+  });
   await page.getByRole('button', { name: 'Save product' }).click();
   await expect(page.getByRole('status')).toContainText('Product saved');
+  const categoryUrl = await page
+    .getByRole('link', { name: 'View category' })
+    .getAttribute('href');
+  const categoryPage = await page.context().newPage();
+  await categoryPage.goto(categoryUrl!);
+  await expect(
+    categoryPage.getByRole('heading', {
+      name: `Browser product ${stamp}`,
+      exact: true,
+    }),
+  ).toBeVisible();
+  const photo = categoryPage.locator('.product-image img').first();
+  await expect(photo).toHaveAttribute('src', /\/api\/media\//);
+  await expect
+    .poll(() => photo.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0);
+  await categoryPage.close();
   const row = page
     .locator('.admin-row')
     .filter({ hasText: `Browser product ${stamp}` });

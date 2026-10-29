@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { createHmac } from 'node:crypto';
 import { PaystackGateway } from '../src/modules/payments/gateway';
 import { PaymentService } from '../src/modules/payments/service';
@@ -67,12 +68,87 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     country: 'NG',
   };
   const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
+  test('admin uploads a real image and its product is immediately visible in its category', async () => {
+    const png = await sharp({
+      create: { width: 64, height: 64, channels: 3, background: '#336655' },
+    })
+      .png()
+      .toBuffer();
+    await request(app)
+      .post('/api/v1/admin/images')
+      .set('Content-Type', 'image/png')
+      .send(png)
+      .expect(401);
+    await request(app)
+      .post('/api/v1/admin/images')
+      .set(auth(customer))
+      .set('Content-Type', 'image/png')
+      .send(png)
+      .expect(403);
+    await request(app)
+      .post('/api/v1/admin/images')
+      .set(auth(admin))
+      .set('Content-Type', 'image/png')
+      .send(Buffer.from('not an image'))
+      .expect(422);
+    await request(app)
+      .post('/api/v1/admin/images')
+      .set(auth(admin))
+      .set('Content-Type', 'image/svg+xml')
+      .send('<svg/>')
+      .expect(415);
+    const image = await request(app)
+      .post('/api/v1/admin/images')
+      .set(auth(admin))
+      .set('Content-Type', 'image/png')
+      .send(png)
+      .expect(201);
+    const publicImage = await request(app)
+      .get(image.body.data.url.replace('/api/media/', '/api/v1/media/'))
+      .expect(200);
+    expect(publicImage.headers['content-type']).toContain('image/webp');
+    expect((await sharp(publicImage.body as Buffer).metadata()).format).toBe(
+      'webp',
+    );
+    const listUrl = `/api/v1/products?categoryId=${categoryId}&currency=NGN`;
+    await request(app).get(listUrl).expect(200); // Prime the public catalog cache.
+    const saved = await request(app)
+      .post('/api/v1/products')
+      .set(auth(admin))
+      .send({
+        sku: 'UPLOAD-NGN',
+        name: 'Uploaded product',
+        description: 'Real merchant photo',
+        price: 50000,
+        currency: 'NGN',
+        stock: 5,
+        categoryId,
+        attributes: { imageUrl: image.body.data.url },
+      })
+      .expect(201);
+    const listing = await request(app).get(listUrl).expect(200);
+    expect(listing.body.data.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: saved.body.data.id,
+          attributes: { imageUrl: image.body.data.url },
+        }),
+      ]),
+    );
+    await request(app)
+      .post('/api/v1/admin/images')
+      .set(auth(admin))
+      .set('Content-Type', 'image/png')
+      .send(Buffer.alloc(3 * 1024 * 1024 + 1))
+      .expect(413);
+  });
   beforeAll(async () => {
     redis.on('error', () => {});
     await redis.connect();
     await db.$connect();
   }, 20000);
   beforeEach(async () => {
+    await db.productImage.deleteMany();
     await db.paymentEvent.deleteMany();
     await db.orderItem.deleteMany();
     await db.order.deleteMany();

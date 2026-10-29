@@ -166,7 +166,7 @@ Missing vectors, unavailable models, missing pgvector, timeouts, or no relevant 
 
 `storefront/` is a separate, locked Next.js 16 / React 19 project. Public catalog pages render on the server; account, cart, checkout and admin interactions use a same-origin backend-for-frontend under `/api/commerce`. Successful sign-in stores the API access token in an HTTP-only, SameSite=Lax cookie, secure in production, and strips it from the browser response. Tokens are never stored in localStorage. Mutations require an exact matching Origin; set `STOREFRONT_ORIGIN` to the deployed HTTPS origin, without a trailing slash. `COMMERCE_API_URL` is server-only and points to the API, not the storefront. Expired sessions require sign-in again.
 
-The storefront includes a responsive homepage, category/currency filters, text/optional semantic search, product pages, cart quantity/removal, address quotes, checkout, payment handoff, paginated order history and admin category/product/inventory/order tools. API authorization remains authoritative. The sample illustrations are bundled SVGs; they do not represent real supplier photography or product reviews.
+The storefront includes a responsive homepage, category/currency filters, text/optional semantic search, product pages, cart quantity/removal, address quotes, checkout, payment handoff, paginated order history and admin category/product/inventory/order tools. API authorization remains authoritative. Admins upload real product photos from their device; the demo illustration selector is removed. New products default to NGN and appear in their selected category as soon as they are saved with store visibility enabled. The category link on the saved-product notice includes the SKU currency. Existing demo illustrations remain only for previously seeded products.
 
 ## Shipping, tax and Paystack test setup
 
@@ -243,3 +243,20 @@ Migration `202610290003_paystack` renames legacy provider-specific payment field
 A successful callback is never proof of payment. The payment screen refreshes status after a Paystack return, but only verified provider notifications can confirm a positive-value order. Server-calculated zero-total orders are confirmed locally without a provider charge. If initialization succeeds at Paystack but its response is lost before the database commits, the deterministic reference prevents a second initialization from creating a duplicate transaction; that rare incomplete setup may require cancellation/reordering after review. Late payments after stock release remain `REFUND_REQUIRED`; automatic refunds are outside this release.
 
 Official integration references: https://paystack.com/docs/api/transaction/ and https://paystack.com/docs/payments/webhooks/. Documentation retrieval was blocked by this workspace’s network policy; tests use provider-contract fixtures and do not claim an authenticated Paystack sandbox transaction. Configure the test key and exercise a sandbox checkout/webhook before activation.
+
+### Merchant product photos
+
+Admin product creation requires a JPEG, PNG or WebP photo (maximum 3 MB, 20 megapixels). The API enforces administrator access, upload rate limits and decoded-image validation, strips metadata, and resizes to at most 1600 × 1600 before storing WebP bytes (maximum 1 MB each) in Neon’s `ProductImage` table. Immutable public image URLs are served through `/api/media/:id`. This avoids ephemeral Render disk storage and requires no extra image-host credentials. The image module isolates persistence so a large catalog can move binary storage to an object store/CDN later; database storage and backups currently include these photos. Uploaded assets are retained when replaced, so failed or repeated saves can leave unused images; automatic cleanup is not included.
+
+Product/category writes invalidate Redis catalog caches and Next.js route caches. Fresh category and homepage visits read the new catalog immediately; already-open customer pages update on navigation/reload. Each product is listed only in its chosen currency; publishing a USD SKU does not create an NGN price or perform FX conversion.
+
+### Hosted payment redirect and session recovery
+
+Placing a positive-value order initializes checkout on the server and redirects directly to `https://checkout.paystack.com`. If initialization fails, the saved unpaid order opens on the retry page; it is not placed again. Expired sessions return to sign-in with the existing order ID preserved. After sign-in, the customer can continue payment for that order. The retry page validates the hosted payment destination before navigating.
+
+For the current staging deployment, use these Paystack **test-mode** dashboard values:
+
+- Webhook: `https://e-com-global-staging.onrender.com/api/payments/paystack/webhook`
+- Callback: `https://e-com-global-staging.onrender.com/checkout/payment`
+
+Each initialization sends its own order-specific callback, adding `?order=<id>`. The callback alone never confirms payment; signed notifications plus server-side transaction verification remain required. Redirect browser tests simulate the Paystack destination; authenticated merchant sandbox payment verification still requires the configured test secret and a real sandbox checkout.

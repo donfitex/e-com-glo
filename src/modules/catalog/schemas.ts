@@ -20,7 +20,15 @@ export const productInput = z
     stock: z.number().int().min(0).max(1000000),
     active: z.boolean().default(true),
     categoryId: id,
-    attributes: z.record(z.string().max(100), z.string().max(500)).default({}),
+    attributes: z
+      .record(z.string().max(100), z.string().max(500))
+      .refine(
+        (values) =>
+          !values.imageUrl ||
+          /^\/api\/media\/[0-9a-f-]{36}$/.test(values.imageUrl),
+        'Invalid product image',
+      )
+      .default({}),
   })
   .strict();
 export const productQuery = pagination

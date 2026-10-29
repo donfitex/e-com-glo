@@ -3,7 +3,8 @@ import { useState, useRef, useEffect, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LockKeyhole, ArrowRight } from 'lucide-react';
-import { api, announceCart } from '@/lib/client-api';
+import { launchPaystack } from '@/lib/payments';
+import { api, ApiError, announceCart } from '@/lib/client-api';
 import { useSession } from './session';
 import {
   money,
@@ -68,7 +69,20 @@ export function Checkout() {
         }),
       });
       announceCart();
-      router.push(`/checkout/payment?order=${order.id}`);
+      if (order.paymentStatus === 'PAID') {
+        router.push(`/checkout/payment?order=${order.id}`);
+        return;
+      }
+      try {
+        await launchPaystack(order.id);
+      } catch (paymentError) {
+        const next = `/checkout/payment?order=${order.id}`;
+        router.push(
+          paymentError instanceof ApiError && paymentError.status === 401
+            ? `/login?next=${encodeURIComponent(next)}`
+            : `${next}&retry=1`,
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not place order.');
     } finally {

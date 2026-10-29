@@ -26,7 +26,9 @@ export default async function ProductPage({
         {product.name}
       </div>
       <div className="product-detail">
-        <div className={`detail-art art-${illustration(product)}`}>
+        <div
+          className={`detail-art art-${illustration(product).startsWith('/') ? 'photo' : illustration(product)}`}
+        >
           <ProductArt kind={illustration(product)} alt={product.name} />
         </div>
         <div className="detail-copy">

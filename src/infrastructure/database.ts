@@ -9,6 +9,7 @@ export interface Database extends Pick<
   | 'order'
   | 'auditEvent'
   | 'paymentEvent'
+  | 'productImage'
   | '$queryRaw'
 > {
   $transaction<T>(
