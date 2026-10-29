@@ -154,6 +154,7 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     await db.$connect();
   }, 20000);
   beforeEach(async () => {
+    await db.storeContent.deleteMany();
     await db.productImage.deleteMany();
     await db.paymentEvent.deleteMany();
     await db.orderItem.deleteMany();
@@ -513,6 +514,51 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
       .get('/api/v1/admin/events')
       .set(auth(customer))
       .expect(403);
+  });
+  test('homepage publishing is admin-only, revision protected and visible immediately', async () => {
+    const initial = await request(app).get('/api/v1/site-content').expect(200);
+    expect(initial.body.data.content.hero.title).toBe('Good finds.');
+    const input = {
+      ...initial.body.data,
+      content: {
+        ...initial.body.data.content,
+        hero: {
+          ...initial.body.data.content.hero,
+          title: 'Merchant-selected finds',
+        },
+      },
+    };
+    await request(app)
+      .put('/api/v1/admin/content')
+      .set(auth(customer))
+      .send(input)
+      .expect(403);
+    const saved = await request(app)
+      .put('/api/v1/admin/content')
+      .set(auth(admin))
+      .send(input)
+      .expect(200);
+    expect(saved.body.data.revision).toBe(1);
+    expect(
+      (await request(app).get('/api/v1/site-content')).body.data.content.hero
+        .title,
+    ).toBe('Merchant-selected finds');
+    await request(app)
+      .put('/api/v1/admin/content')
+      .set(auth(admin))
+      .send(input)
+      .expect(409);
+    await request(app)
+      .put('/api/v1/admin/content')
+      .set(auth(admin))
+      .send({
+        revision: 1,
+        content: {
+          ...input.content,
+          hero: { ...input.content.hero, buttonHref: 'javascript:alert(1)' },
+        },
+      })
+      .expect(400);
   });
   test('liveness, dependency readiness, headers and safe errors', async () => {
     expect((await request(app).get('/health')).body.service).toBe(

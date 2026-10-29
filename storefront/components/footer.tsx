@@ -1,6 +1,10 @@
+'use client';
+import { useSiteContent } from './site-provider';
+import { siteText } from '@/lib/site-content';
 import Link from 'next/link';
 import { Globe2, ArrowUpRight } from 'lucide-react';
 export function Footer() {
+  const site = useSiteContent();
   return (
     <footer className="footer">
       <div className="shell footer-main">
@@ -13,8 +17,12 @@ export function Footer() {
             </span>
           </Link>
           <p>
-            Everyday essentials. Unexpected discoveries.
-            <br />A little more possibility, wherever you are.
+            {siteText(
+              site,
+              'footer',
+              'description',
+              'Everyday essentials. Unexpected discoveries. A little more possibility, wherever you are.',
+            )}
           </p>
         </div>
         <div>
@@ -32,18 +40,35 @@ export function Footer() {
           <Link href="/cart">Shopping bag</Link>
         </div>
         <div className="footer-note">
-          <span className="eyebrow">BUILT FOR EVERYDAY DISCOVERY</span>
+          <span className="eyebrow">
+            {siteText(
+              site,
+              'footer',
+              'eyebrow',
+              'BUILT FOR EVERYDAY DISCOVERY',
+            )}
+          </span>
           <h3>
-            One world.
-            <br />
-            More possibilities.
+            {siteText(
+              site,
+              'footer',
+              'title',
+              'One world. More possibilities.',
+            )}
           </h3>
         </div>
       </div>
       <div className="shell footer-bottom">
         <span>© {new Date().getFullYear()} E-com Global</span>
         <Link href="/policies">Shipping, payments & privacy</Link>
-        <span>Thoughtfully selected. Globally minded.</span>
+        <span>
+          {siteText(
+            site,
+            'footer',
+            'bottomText',
+            'Thoughtfully selected. Globally minded.',
+          )}
+        </span>
       </div>
     </footer>
   );

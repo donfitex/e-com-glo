@@ -1,3 +1,5 @@
+import { siteContent } from '@/lib/server-api';
+import { SiteProvider } from '@/components/site-provider';
 import type { Metadata } from 'next';
 import { SessionProvider } from '@/components/session';
 import { Header } from '@/components/header';
@@ -11,11 +13,12 @@ export const metadata: Metadata = {
   description:
     'Discover electronics, fashion, home essentials and more. A world of everyday finds, all in one place.',
 };
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const site = await siteContent();
   return (
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
@@ -29,11 +32,13 @@ export default function RootLayout({
         <a className="skip-link" href="#main">
           Skip to content
         </a>
-        <SessionProvider>
-          <Header />
-          <main id="main">{children}</main>
-          <Footer />
-        </SessionProvider>
+        <SiteProvider value={site}>
+          <SessionProvider>
+            <Header />
+            <main id="main">{children}</main>
+            <Footer />
+          </SessionProvider>
+        </SiteProvider>
       </body>
     </html>
   );

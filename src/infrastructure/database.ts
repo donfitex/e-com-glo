@@ -12,6 +12,7 @@ export interface Database extends Pick<
   | 'orderWorkItem'
   | 'paymentEvent'
   | 'productImage'
+  | 'storeContent'
   | '$queryRaw'
 > {
   $transaction<T>(

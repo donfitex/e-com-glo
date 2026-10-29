@@ -1,4 +1,5 @@
 'use client';
+import { ContentEditor } from './content-editor';
 import { OrderFulfillment } from './order-fulfillment';
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import Link from 'next/link';
@@ -15,9 +16,9 @@ import {
 } from '@/lib/types';
 export function Admin() {
   const { user, loading } = useSession();
-  const [tab, setTab] = useState<'products' | 'categories' | 'orders'>(
-    'products',
-  );
+  const [tab, setTab] = useState<
+    'products' | 'categories' | 'orders' | 'homepage'
+  >('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -159,19 +160,21 @@ export function Admin() {
         <p>Catalog, inventory and orders, in one place.</p>
       </div>
       <nav className="admin-tabs" aria-label="Management sections">
-        {(['products', 'categories', 'orders'] as const).map((name) => (
-          <button
-            key={name}
-            className={tab === name ? 'selected' : ''}
-            onClick={() => {
-              setTab(name);
-              setPage(1);
-              setMessage('');
-            }}
-          >
-            {name[0]!.toUpperCase() + name.slice(1)}
-          </button>
-        ))}
+        {(['products', 'categories', 'orders', 'homepage'] as const).map(
+          (name) => (
+            <button
+              key={name}
+              className={tab === name ? 'selected' : ''}
+              onClick={() => {
+                setTab(name);
+                setPage(1);
+                setMessage('');
+              }}
+            >
+              {name[0]!.toUpperCase() + name.slice(1)}
+            </button>
+          ),
+        )}
       </nav>
       {error && (
         <div className="notice error" role="alert">
@@ -188,6 +191,7 @@ export function Admin() {
           )}
         </div>
       )}
+      {tab === 'homepage' && <ContentEditor />}
       {tab === 'products' && (
         <div className="admin-layout">
           <div>
@@ -479,7 +483,7 @@ export function Admin() {
           </p>
         </>
       )}
-      {tab !== 'categories' && (
+      {(tab === 'products' || tab === 'orders') && (
         <div className="pagination">
           {page > 1 && (
             <button

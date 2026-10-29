@@ -282,3 +282,7 @@ Migration `202610290005_order_tracking` adds the shipment fields without inventi
 ## Backend master plan additions
 
 See [the stage mapping and measured results](docs/backend-master-plan.md) and [release/rollback operations](docs/release.md). Added commands include `learn:http`, `learn:crud`, `worker:orders`, `benchmark:cache`, `benchmark:search`, and `smoke:release`. API documentation is available at `/api/v1/openapi.json` on the backend or `/api/commerce/openapi.json` on the storefront. Durable order events use a PostgreSQL transactional outbox, Redis Streams consumer groups, retries and a database dead-letter ledger; the Render staging supervisor starts the independent worker automatically after migrations. Existing users keep their credentials through a versioned bcrypt upgrade on successful login.
+
+## Storefront content management
+
+**Admin → Homepage** manages the hero and editorial banners, category/product headings, closing section, announcement, shopping benefits, footer copy and FAQs. Each banner supports a real uploaded JPEG/PNG/WebP image through the existing durable media service. Links are limited to storefront routes; text is rendered as text rather than HTML. Publishing uses a revision check to prevent lost concurrent edits, records an audit event, and invalidates storefront route caches. Existing content is the default until an administrator publishes changes.

@@ -173,3 +173,10 @@ model OrderWorkItem {
  state String
  updatedAt DateTime @updatedAt
 }
+
+model StoreContent {
+ id String @id
+ content Json
+ revision Int @default(0)
+ updatedAt DateTime @updatedAt
+}

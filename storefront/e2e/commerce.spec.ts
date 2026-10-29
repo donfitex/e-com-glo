@@ -379,3 +379,63 @@ test('release smoke checks validate the running full-stack app and independent w
   expect(report.checks).toContain('OpenAPI contract');
   expect(report.checks).toContain('admin deep health and worker heartbeat');
 });
+
+test('administrator publishes homepage text and uploaded banner images', async ({
+  page,
+}) => {
+  await page.goto('/login?next=/admin');
+  await page.getByLabel('Email address').fill(adminEmail);
+  await page.getByLabel('Password', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Behind the good finds.' }),
+  ).toBeVisible();
+  const original = (
+    await (await page.request.get('/api/commerce/admin/content')).json()
+  ).data;
+  try {
+    await page.getByRole('button', { name: 'Homepage', exact: true }).click();
+    await page
+      .getByLabel('Title', { exact: true })
+      .fill('A world of merchant finds.');
+    await page.getByLabel('Section image', { exact: true }).setInputFiles({
+      name: 'hero.png',
+      mimeType: 'image/png',
+      buffer: await sharp({
+        create: { width: 300, height: 300, channels: 3, background: '#6b806b' },
+      })
+        .png()
+        .toBuffer(),
+    });
+    await page
+      .getByRole('button', { name: 'Publish section', exact: true })
+      .click();
+    await expect(page.getByRole('status')).toContainText('Section published');
+    const preview = await page.context().newPage();
+    try {
+      await preview.goto('/');
+      await expect(preview.locator('.hero h1')).toContainText(
+        'A world of merchant finds.',
+      );
+      await expect(preview.locator('.hero-headphones')).toHaveAttribute(
+        'src',
+        /\/api\/media\//,
+      );
+      await expect
+        .poll(() =>
+          preview
+            .locator('.hero-headphones')
+            .evaluate((img: HTMLImageElement) => img.naturalWidth),
+        )
+        .toBeGreaterThan(0);
+    } finally {
+      await preview.close();
+    }
+  } finally {
+    await db.storeContent.upsert({
+      where: { id: 'homepage' },
+      create: { id: 'homepage', content: original.content, revision: 1 },
+      update: { content: original.content, revision: { increment: 1 } },
+    });
+  }
+});

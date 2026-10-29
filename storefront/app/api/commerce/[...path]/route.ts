@@ -5,7 +5,7 @@ import { apiOrigin } from '@/lib/server-api';
 export const runtime = 'nodejs';
 const COOKIE = 'ecom_session';
 const allowed =
-  /^(openapi\.json|checkout\/options|auth\/(login|register|me|logout)|categories(?:\/[0-9a-f-]+)?|products(?:\/[0-9a-f-]+)?|search|cart(?:\/items(?:\/[0-9a-f-]+)?)?|orders(?:\/(?:preview|quote|checkout|[0-9a-f-]+(?:\/payment)?))?|admin\/(?:health|events(?:\/[0-9a-f-]+\/retry)?|images|orders(?:\/[0-9a-f-]+\/(?:status|shipment))?|products))$/;
+  /^(site-content|openapi\.json|checkout\/options|auth\/(login|register|me|logout)|categories(?:\/[0-9a-f-]+)?|products(?:\/[0-9a-f-]+)?|search|cart(?:\/items(?:\/[0-9a-f-]+)?)?|orders(?:\/(?:preview|quote|checkout|[0-9a-f-]+(?:\/payment)?))?|admin\/(?:content|health|events(?:\/[0-9a-f-]+\/retry)?|images|orders(?:\/[0-9a-f-]+\/(?:status|shipment))?|products))$/;
 async function proxy(
   req: NextRequest,
   context: { params: Promise<{ path: string[] }> },
@@ -86,7 +86,7 @@ async function proxy(
     if (
       upstream.ok &&
       req.method !== 'GET' &&
-      /^(products|categories)(\/|$)/.test(path)
+      /^(products|categories|admin\/content)(\/|$)/.test(path)
     ) {
       revalidatePath('/', 'layout');
     }
@@ -133,4 +133,10 @@ async function proxy(
     );
   }
 }
-export { proxy as GET, proxy as POST, proxy as PATCH, proxy as DELETE };
+export {
+  proxy as GET,
+  proxy as POST,
+  proxy as PATCH,
+  proxy as DELETE,
+  proxy as PUT,
+};

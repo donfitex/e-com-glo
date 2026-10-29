@@ -1,3 +1,5 @@
+import { cache } from 'react';
+import type { SiteContent } from './site-content';
 import type { Category, Product, Page } from './types';
 export function apiOrigin() {
   const url = new URL(process.env.COMMERCE_API_URL ?? 'http://127.0.0.1:3000');
@@ -61,3 +63,15 @@ export function defaultCurrency() {
     ? process.env.DEFAULT_CURRENCY!
     : 'NGN';
 }
+
+export const siteContent = cache(async (): Promise<SiteContent | null> => {
+  try {
+    const response = await fetch(`${apiOrigin()}/api/v1/site-content`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(2000),
+    });
+    return response.ok ? (await response.json()).data : null;
+  } catch {
+    return null;
+  }
+});

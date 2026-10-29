@@ -11,18 +11,36 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useSession } from './session';
+import { useSiteContent } from './site-provider';
+import { siteText } from '@/lib/site-content';
 import { ThemeToggle } from './theme-toggle';
 export function Header() {
   const { user, count } = useSession();
+  const site = useSiteContent();
   const [menu, setMenu] = useState(false);
   return (
     <>
-      <div className="announcement">
-        <span>A world of good finds. All in one place.</span>
-        <Link href="/shop">
-          Explore the collection <ArrowUpRight size={13} />
-        </Link>
-      </div>
+      {site?.content.announcement?.enabled !== false && (
+        <div className="announcement">
+          <span>
+            {siteText(
+              site,
+              'announcement',
+              'text',
+              'A world of good finds. All in one place.',
+            )}
+          </span>
+          <Link href={siteText(site, 'announcement', 'buttonHref', '/shop')}>
+            {siteText(
+              site,
+              'announcement',
+              'buttonLabel',
+              'Explore the collection',
+            )}{' '}
+            <ArrowUpRight size={13} />
+          </Link>
+        </div>
+      )}
       <header className="header">
         <div className="shell header-main">
           <Link href="/" className="brand" aria-label="E-com Global home">

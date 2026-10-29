@@ -1,13 +1,16 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useId } from 'react';
 
 export function ProductImageUpload({
   existing,
   required,
+  label = 'Product photo',
 }: {
   existing?: string;
   required: boolean;
+  label?: string;
 }) {
+  const helpId = useId();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
   useEffect(() => {
@@ -18,10 +21,10 @@ export function ProductImageUpload({
   }, [file]);
   return (
     <label>
-      Product photo
+      {label}
       <input
-        aria-label="Product photo"
-        aria-describedby="product-photo-help"
+        aria-label={label}
+        aria-describedby={helpId}
         name="photo"
         type="file"
         accept="image/jpeg,image/png,image/webp"
@@ -37,9 +40,9 @@ export function ProductImageUpload({
           setFile(selected ?? null);
         }}
       />
-      <small id="product-photo-help">
-        Upload a JPEG, PNG or WebP, up to 3 MB. Your photo appears on the
-        product and category pages.
+      <small id={helpId}>
+        Upload a JPEG, PNG or WebP, up to 3 MB. Your uploaded image will be used
+        in this section.
       </small>
       {(preview || existing) && (
         <img

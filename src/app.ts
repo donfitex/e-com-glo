@@ -1,3 +1,4 @@
+import { contentRouter } from './modules/content/http';
 import { openapi } from './http/openapi';
 import { deadline } from './shared/deadline';
 import { getHeapStatistics } from 'node:v8';
@@ -252,6 +253,7 @@ export function createApp(config: Config, deps: Dependencies) {
       }
     }),
   );
+  app.use('/api/v1', contentRouter(deps.db, guard));
   app.use('/api/v1', catalogRouter(catalog, guard));
   app.get(
     '/api/v1/search',

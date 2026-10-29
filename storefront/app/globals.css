@@ -2704,3 +2704,38 @@ button {
     grid-template-columns: 1fr;
   }
 }
+.content-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.content-tabs .button {
+  min-height: 36px;
+  padding: 8px 14px;
+}
+.content-form {
+  max-width: 760px;
+}
+.content-form textarea {
+  width: 100%;
+  resize: vertical;
+}
+.content-form .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.content-form .checkbox-label input {
+  margin: 0;
+}
+.hero-copy > p,
+.hero-corner,
+.editorial-copy h2,
+.footer-note h3,
+.footer-main p {
+  white-space: pre-line;
+}
+.content-manager .section-heading p {
+  margin-top: 10px;
+}
