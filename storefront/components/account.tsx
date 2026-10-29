@@ -33,6 +33,24 @@ export function Account() {
         <p>A good day for a new discovery.</p>
       </div>
       <div className="account-grid">
+        <Link className="account-card" href="/account/inbox">
+          <Package />
+          <h2>Your inbox</h2>
+          <p>Private support conversations and replies.</p>
+          <ArrowUpRight />
+        </Link>
+        <Link className="account-card" href="/account/updates">
+          <Heart />
+          <h2>Store updates</h2>
+          <p>Business announcements, offers and notification preferences.</p>
+          <ArrowUpRight />
+        </Link>
+        <Link className="account-card" href="/account/addresses">
+          <Settings2 />
+          <h2>Delivery addresses</h2>
+          <p>Manage saved locations and choose your default.</p>
+          <ArrowUpRight />
+        </Link>
         <Link className="account-card" href="/account/orders">
           <Package />
           <h2>Your orders</h2>

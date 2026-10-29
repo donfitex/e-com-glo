@@ -3,6 +3,8 @@ import { useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowUpRight, ShieldCheck } from 'lucide-react';
+import { initializeCustomerInbox } from '@/lib/customer-inbox';
+import type { User } from '@/lib/types';
 import { api } from '@/lib/client-api';
 import { useSession } from './session';
 export function AuthForm({ register = false }: { register?: boolean }) {
@@ -21,6 +23,15 @@ export function AuthForm({ register = false }: { register?: boolean }) {
         method: 'POST',
         body: JSON.stringify(Object.fromEntries(form)),
       });
+      // Prepare private messaging during normal sign-in; no recovery prompts for customers.
+      const me = await api<User>('/auth/me');
+      if (me.role === 'CUSTOMER') {
+        try {
+          await initializeCustomerInbox(me.id, String(form.get('password')));
+        } catch {
+          /* Account access and checkout remain available if device crypto/storage is unavailable. */
+        }
+      }
       await refresh();
       const next = params.get('next');
       router.push(

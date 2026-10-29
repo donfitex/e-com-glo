@@ -5,7 +5,7 @@ import { apiOrigin } from '@/lib/server-api';
 export const runtime = 'nodejs';
 const COOKIE = 'ecom_session';
 const allowed =
-  /^(wishlist(?:\/(?:ids|[0-9a-f-]+))?|contact\/(?:key|messages)|site-content|openapi\.json|checkout\/options|auth\/(login|register|me|logout)|categories(?:\/[0-9a-f-]+)?|products(?:\/[0-9a-f-]+)?|search|cart(?:\/items(?:\/[0-9a-f-]+)?)?|orders(?:\/(?:preview|quote|checkout|[0-9a-f-]+(?:\/payment)?))?|admin\/(?:inbox\/(?:keys|summary|messages(?:\/[0-9a-f-]+)?)|content|health|events(?:\/[0-9a-f-]+\/retry)?|images|orders(?:\/[0-9a-f-]+\/(?:status|shipment))?|products))$/;
+  /^(conversations(?:\/(?:key|vault|summary|[0-9a-f-]+(?:\/(?:messages|read))?))?|addresses(?:\/[0-9a-f-]+(?:\/default)?)?|announcements(?:\/(?:summary|[0-9a-f-]+\/read))?|preferences|admin\/broadcasts(?:\/[0-9a-f-]+\/(?:publish|archive))?|wishlist(?:\/(?:ids|[0-9a-f-]+))?|contact\/(?:key|messages)|site-content|openapi\.json|checkout\/options|auth\/(login|register|me|logout)|categories(?:\/[0-9a-f-]+)?|products(?:\/[0-9a-f-]+)?|search|cart(?:\/items(?:\/[0-9a-f-]+)?)?|orders(?:\/(?:preview|quote|checkout|[0-9a-f-]+(?:\/payment)?))?|admin\/(?:inbox\/(?:keys|summary|messages(?:\/[0-9a-f-]+)?)|content|health|events(?:\/[0-9a-f-]+\/retry)?|images|orders(?:\/[0-9a-f-]+\/(?:status|shipment))?|products))$/;
 async function proxy(
   req: NextRequest,
   context: { params: Promise<{ path: string[] }> },

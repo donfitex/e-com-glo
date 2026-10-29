@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { LockKeyhole, Send } from 'lucide-react';
 import { api, ApiError } from '@/lib/client-api';
 import {
@@ -75,6 +76,20 @@ export function ContactForm() {
       setBusy(false);
     }
   }
+  if (user)
+    return (
+      <div className="form-card">
+        <LockKeyhole />
+        <h2>Let’s work it out, together.</h2>
+        <p>
+          Send a private message in your account inbox. Our team can reply, and
+          you can continue the conversation until you are satisfied.
+        </p>
+        <Link className="button primary" href="/account/inbox">
+          Open your private inbox
+        </Link>
+      </div>
+    );
   return (
     <div className="contact-layout">
       <div className="contact-intro">
@@ -116,6 +131,13 @@ export function ContactForm() {
             {error}
           </div>
         )}
+        <p className="notice">
+          Want replies and an ongoing conversation?{' '}
+          <Link href="/login?next=/account/inbox">
+            Sign in to your private inbox
+          </Link>
+          . This guest form is one-way contact intake.
+        </p>
         <label>
           Your name
           <input
@@ -123,7 +145,7 @@ export function ContactForm() {
             required
             maxLength={120}
             autoComplete="name"
-            defaultValue={user?.name}
+            defaultValue=""
           />
         </label>
         <label>
@@ -134,7 +156,7 @@ export function ContactForm() {
             required
             maxLength={254}
             autoComplete="email"
-            defaultValue={user?.email}
+            defaultValue=""
           />
         </label>
         <label>

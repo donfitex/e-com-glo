@@ -1,5 +1,7 @@
 # Encrypted customer support inbox
 
+This page documents the original anonymous intake and administrator recovery flow. Registered customers now use [two-way conversations with automatic sign-in sync](customer-experience.md); they do not need recovery files or an extra passphrase.
+
 ## Administrator setup and recovery
 
 Open **Admin → Inbox**. Create a strong recovery passphrase that is different from the sign-in password. The browser generates a recipient key pair; download its password-protected recovery file, then activate the inbox. Activation publishes only the public key. The server never receives the recovery passphrase, private JWK, decrypted message, sender name or sender email from the official contact form.

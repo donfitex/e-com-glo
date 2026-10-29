@@ -61,9 +61,9 @@ export function Header() {
             <button type="submit">Search</button>
           </form>
           <div
-            className={`header-actions ${user?.role === 'ADMIN' ? 'admin-header-actions' : ''}`}
+            className={`header-actions ${user ? 'admin-header-actions' : ''}`}
           >
-            {user?.role === 'ADMIN' && <InboxBell />}
+            {user && <InboxBell />}
             <ThemeToggle />
             <Link className="account-link" href={user ? '/account' : '/login'}>
               <UserRound size={21} />

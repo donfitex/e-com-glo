@@ -296,3 +296,7 @@ Customers can use **Contact us** without an account. Administrators first activa
 Customers can use product hearts to save up to 200 active products across devices, manage them at `/wishlist`, and share a product using the device share sheet or a copyable link. Saved products require a signed-in account and every API operation is scoped to that account. Unavailable saved products remain removable without exposing inactive product details.
 
 Recently viewed products retain only up to eight product IDs in this browser; the homepage shows up to four and includes a clear-history control. Browsing history is optional and shopping continues when device storage is blocked. `/help` includes admin-editable FAQs and links to support and order tracking.
+
+### Customer conversations, announcements and delivery addresses
+
+Registered buyers can exchange private replies with the store at `/account/inbox`, using only normal account sign-in. Administrators use **Conversations** for support and **Broadcasts** for business updates/promotions (draft, preview, publish, archive, image uploads). Buyers have unread notifications and promotion preferences at `/account/updates`. Checkout can remember delivery addresses, explicitly reuse a saved location or enter a new one; `/account/addresses` manages the saved address book. See [customer experience and security details](docs/customer-experience.md).

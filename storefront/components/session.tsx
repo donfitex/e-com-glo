@@ -7,6 +7,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
+import { forgetCustomerInbox } from '@/lib/customer-inbox';
 import { api, announceCart } from '@/lib/client-api';
 import type { User, Cart } from '@/lib/types';
 const Context = createContext<{
@@ -53,6 +54,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
   const logout = async () => {
     await api('/auth/logout', { method: 'POST' });
+    if (user) await forgetCustomerInbox(user.id);
     setUser(null);
     setCount(0);
     announceCart();

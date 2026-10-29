@@ -13,6 +13,7 @@ import {
   type Quote,
   type Order,
 } from '@/lib/types';
+import type { SavedAddress } from './address-book';
 interface CheckoutOptions {
   destinations: { country: string; currency: string }[];
   paymentCurrencies: string[] | null;
@@ -36,6 +37,51 @@ export function Checkout() {
   const [busy, setBusy] = useState(false);
   const [address, setAddress] = useState<Address | null>(null);
   const key = useRef<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState('');
+  const [saveAddress, setSaveAddress] = useState(true);
+  useEffect(() => {
+    if (user)
+      api<SavedAddress[]>('/addresses')
+        .then(setSavedAddresses)
+        .catch(() => {});
+  }, [user]);
+  function chooseAddress(id: string) {
+    const selected = savedAddresses.find((a) => a.id === id);
+    const form = formRef.current;
+    setSelectedAddress(id);
+    if (!form) return;
+    const values = selected?.address;
+    for (const field of [
+      'name',
+      'email',
+      'phone',
+      'line1',
+      'line2',
+      'city',
+      'region',
+      'postalCode',
+      'country',
+    ] as const) {
+      const input = form.elements.namedItem(field);
+      if (
+        input instanceof HTMLInputElement ||
+        input instanceof HTMLSelectElement
+      )
+        input.value =
+          values?.[field] ??
+          (field === 'name'
+            ? (user?.name ?? '')
+            : field === 'email'
+              ? (user?.email ?? '')
+              : '');
+    }
+    revision.current++;
+    setQuote(null);
+    setAddress(null);
+    key.current = null;
+  }
   const revision = useRef(0);
   useEffect(() => {
     if (user)
@@ -85,6 +131,7 @@ export function Checkout() {
         headers: { 'Idempotency-Key': key.current! },
         body: JSON.stringify({
           shippingAddress: address,
+          saveAddress,
           quote: { total: quote.total, ruleVersion: quote.ruleVersion },
         }),
       });
@@ -155,6 +202,7 @@ export function Checkout() {
       ) : (
         <div className="cart-layout">
           <form
+            ref={formRef}
             className="form-card shipping-form"
             onSubmit={preview}
             onChange={() => {
@@ -165,6 +213,31 @@ export function Checkout() {
             }}
           >
             <h2>Shipping address</h2>
+            {savedAddresses.length > 0 && (
+              <div className="saved-address-picker">
+                <label>
+                  Use a saved delivery address
+                  <select
+                    value={selectedAddress}
+                    onChange={(e) => chooseAddress(e.target.value)}
+                  >
+                    <option value="">Enter a new address</option>
+                    {savedAddresses.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.label}
+                        {a.isDefault ? ' · Default' : ''} · {a.address.city},{' '}
+                        {a.address.country}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <small>
+                  Review and edit the fields below before calculating delivery.{' '}
+                  <Link href="/account/addresses">Manage addresses</Link>
+                </small>
+              </div>
+            )}
+
             <label>
               Full name
               <input
@@ -271,6 +344,20 @@ export function Checkout() {
                 </select>
               </label>
             </div>
+            <label className="preference-control">
+              <input
+                type="checkbox"
+                checked={saveAddress}
+                onChange={(e) => setSaveAddress(e.target.checked)}
+              />
+              <span>
+                Save this delivery address for my next checkout
+                <small>
+                  Up to ten addresses. You can remove saved locations in your
+                  account.
+                </small>
+              </span>
+            </label>
             <button
               className="button outline"
               disabled={

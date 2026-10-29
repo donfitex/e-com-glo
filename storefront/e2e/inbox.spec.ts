@@ -11,6 +11,7 @@ const email = `inbox-admin-${stamp}@example.com`;
 const password = 'Browser-inbox-login-123';
 const recovery = 'Browser-recovery-passphrase-123';
 test.beforeAll(async () => {
+  await db.conversation.deleteMany();
   await db.supportMessage.deleteMany();
   await db.inboxKey.deleteMany();
   await db.user.create({

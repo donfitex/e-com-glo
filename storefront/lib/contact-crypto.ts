@@ -1,4 +1,5 @@
-// One-way browser-to-admin encryption. No plaintext/private key is sent to the API.
+// Legacy contact intake and version 2 two-way browser encryption.
+// No message plaintext or unencrypted private key is sent to the messaging API.
 export interface ContactPayload {
   name: string;
   email: string;

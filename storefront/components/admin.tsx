@@ -1,4 +1,6 @@
 'use client';
+import { Conversations } from './conversations';
+import { Announcements } from './announcements';
 import { AdminInbox } from './admin-inbox';
 import { useInboxNotifications } from './inbox-notifications';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -23,13 +25,15 @@ const adminSections = [
   'orders',
   'homepage',
   'inbox',
+  'conversations',
+  'broadcasts',
 ] as const;
 type AdminSection = (typeof adminSections)[number];
 export function Admin() {
   const { user, loading } = useSession();
   const params = useSearchParams();
   const router = useRouter();
-  const { unread } = useInboxNotifications();
+  const { unread, conversationUnread } = useInboxNotifications();
   useEffect(() => {
     const section = params.get('section');
     if (adminSections.some((value) => value === section))
@@ -178,7 +182,15 @@ export function Admin() {
       </div>
       <nav className="admin-tabs" aria-label="Management sections">
         {(
-          ['products', 'categories', 'orders', 'homepage', 'inbox'] as const
+          [
+            'products',
+            'categories',
+            'orders',
+            'homepage',
+            'inbox',
+            'conversations',
+            'broadcasts',
+          ] as const
         ).map((name) => (
           <button
             key={name}
@@ -191,6 +203,9 @@ export function Admin() {
             }}
           >
             {name[0]!.toUpperCase() + name.slice(1)}
+            {name === 'conversations' && conversationUnread > 0 && (
+              <span className="unread-badge">{conversationUnread}</span>
+            )}
             {name === 'inbox' && unread > 0 && (
               <span className="unread-badge">{unread}</span>
             )}
@@ -214,6 +229,8 @@ export function Admin() {
       )}
       {tab === 'homepage' && <ContentEditor />}
       {tab === 'inbox' && <AdminInbox />}
+      {tab === 'conversations' && <Conversations />}
+      {tab === 'broadcasts' && <Announcements management />}
       {tab === 'products' && (
         <div className="admin-layout">
           <div>
