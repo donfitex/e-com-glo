@@ -1,3 +1,5 @@
+import { inboxRouter } from './modules/inbox/http';
+import { InboxService } from './modules/inbox/service';
 import { contentRouter } from './modules/content/http';
 import { openapi } from './http/openapi';
 import { deadline } from './shared/deadline';
@@ -252,6 +254,14 @@ export function createApp(config: Config, deps: Dependencies) {
         });
       }
     }),
+  );
+  app.use(
+    '/api/v1',
+    inboxRouter(
+      new InboxService(deps.db),
+      guard,
+      rateLimit(deps.limiter, 'contact', 20, 600),
+    ),
   );
   app.use('/api/v1', contentRouter(deps.db, guard));
   app.use('/api/v1', catalogRouter(catalog, guard));

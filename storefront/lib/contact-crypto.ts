@@ -1,0 +1,287 @@
+// One-way browser-to-admin encryption. No plaintext/private key is sent to the API.
+export interface ContactPayload {
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  orderReference: string;
+}
+export interface ContactKey {
+  id: string;
+  fingerprint: string;
+  publicJwk: JsonWebKey;
+}
+export interface MessageEnvelope {
+  version: 1;
+  id: string;
+  keyId: string;
+  iv: string;
+  wrappedKey: string;
+  ciphertext: string;
+}
+export interface KeyBackup {
+  version: 1;
+  kdf: 'PBKDF2-SHA256';
+  iterations: 600000;
+  keyId: string;
+  fingerprint: string;
+  publicJwk: JsonWebKey;
+  salt: string;
+  iv: string;
+  ciphertext: string;
+}
+const encoder = new TextEncoder();
+function b64(value: ArrayBuffer) {
+  return btoa(
+    Array.from(new Uint8Array(value), (byte) => String.fromCharCode(byte)).join(
+      '',
+    ),
+  );
+}
+function bytes(value: string): ArrayBuffer {
+  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0))
+    .buffer as ArrayBuffer;
+}
+function uuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+async function fingerprint(jwk: JsonWebKey) {
+  const key = await crypto.subtle.importKey(
+    'jwk',
+    jwk,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    true,
+    ['encrypt'],
+  );
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    await crypto.subtle.exportKey('spki', key),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+}
+function contactPayload(value: unknown): ContactPayload {
+  if (!value || typeof value !== 'object') throw new Error('Invalid message');
+  const input = value as Record<string, unknown>;
+  for (const [field, max] of [
+    ['name', 120],
+    ['email', 254],
+    ['subject', 160],
+    ['message', 5000],
+    ['orderReference', 64],
+  ] as const) {
+    if (
+      typeof input[field] !== 'string' ||
+      input[field].length > max ||
+      (field !== 'orderReference' && !input[field].trim())
+    )
+      throw new Error('Check your message fields');
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email as string))
+    throw new Error('Enter a valid email address');
+  return {
+    name: (input.name as string).trim(),
+    email: (input.email as string).trim(),
+    subject: (input.subject as string).trim(),
+    message: (input.message as string).trim(),
+    orderReference: (input.orderReference as string).trim(),
+  };
+}
+async function backupKey(passphrase: string, salt: ArrayBuffer) {
+  if (passphrase.length < 12 || passphrase.length > 256)
+    throw new Error('Use a recovery passphrase between 12 and 256 characters');
+  const material = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(passphrase),
+    'PBKDF2',
+    false,
+    ['deriveKey'],
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 600000, hash: 'SHA-256' },
+    material,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+export async function createInboxKey(passphrase: string) {
+  if (passphrase.length < 12 || passphrase.length > 256)
+    throw new Error('Use a recovery passphrase between 12 and 256 characters');
+  const pair = await crypto.subtle.generateKey(
+    {
+      name: 'RSA-OAEP',
+      modulusLength: 3072,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: 'SHA-256',
+    },
+    true,
+    ['encrypt', 'decrypt'],
+  );
+  const publicJwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
+  const privateJwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
+  const keyId = crypto.randomUUID();
+  const fp = await fingerprint(publicJwk);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const wrapping = await backupKey(passphrase, salt.buffer);
+  const ciphertext = await crypto.subtle.encrypt(
+    {
+      name: 'AES-GCM',
+      iv,
+      additionalData: encoder.encode(`ecom-backup:v1:${keyId}:${fp}`),
+      tagLength: 128,
+    },
+    wrapping,
+    encoder.encode(JSON.stringify(privateJwk)),
+  );
+  const backup: KeyBackup = {
+    version: 1,
+    kdf: 'PBKDF2-SHA256',
+    iterations: 600000,
+    keyId,
+    fingerprint: fp,
+    publicJwk,
+    salt: b64(salt.buffer),
+    iv: b64(iv.buffer),
+    ciphertext: b64(ciphertext),
+  };
+  const privateKey = await crypto.subtle.importKey(
+    'jwk',
+    privateJwk,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    false,
+    ['decrypt'],
+  );
+  return {
+    backup,
+    privateKey,
+    publicKey: { id: keyId, publicJwk, fingerprint: fp },
+  };
+}
+export async function unlockInboxKey(input: unknown, passphrase: string) {
+  if (!input || typeof input !== 'object')
+    throw new Error('Invalid recovery file');
+  const backup = input as KeyBackup;
+  if (
+    backup.version !== 1 ||
+    backup.kdf !== 'PBKDF2-SHA256' ||
+    backup.iterations !== 600000 ||
+    !uuid(backup.keyId) ||
+    !/^[a-f0-9]{64}$/.test(backup.fingerprint) ||
+    typeof backup.ciphertext !== 'string' ||
+    backup.ciphertext.length > 16000 ||
+    typeof backup.salt !== 'string' ||
+    typeof backup.iv !== 'string'
+  )
+    throw new Error('Invalid recovery file');
+  if (
+    bytes(backup.salt).byteLength !== 16 ||
+    bytes(backup.iv).byteLength !== 12 ||
+    (await fingerprint(backup.publicJwk)) !== backup.fingerprint
+  )
+    throw new Error('Recovery file fingerprint mismatch');
+  const wrapping = await backupKey(passphrase, bytes(backup.salt));
+  const clear = await crypto.subtle.decrypt(
+    {
+      name: 'AES-GCM',
+      iv: bytes(backup.iv),
+      additionalData: encoder.encode(
+        `ecom-backup:v1:${backup.keyId}:${backup.fingerprint}`,
+      ),
+      tagLength: 128,
+    },
+    wrapping,
+    bytes(backup.ciphertext),
+  );
+  const jwk = JSON.parse(new TextDecoder().decode(clear)) as JsonWebKey;
+  if (jwk.n !== backup.publicJwk.n || jwk.e !== backup.publicJwk.e)
+    throw new Error('Recovery key mismatch');
+  const privateKey = await crypto.subtle.importKey(
+    'jwk',
+    jwk,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    false,
+    ['decrypt'],
+  );
+  return { privateKey, keyId: backup.keyId, fingerprint: backup.fingerprint };
+}
+export async function encryptContact(
+  input: ContactPayload,
+  key: ContactKey,
+): Promise<MessageEnvelope> {
+  if (!uuid(key.id) || (await fingerprint(key.publicJwk)) !== key.fingerprint)
+    throw new Error('Inbox public key fingerprint mismatch');
+  const payload = contactPayload(input);
+  const id = crypto.randomUUID();
+  const secret = await crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt'],
+  );
+  const publicKey = await crypto.subtle.importKey(
+    'jwk',
+    key.publicJwk,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    false,
+    ['encrypt'],
+  );
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    {
+      name: 'AES-GCM',
+      iv,
+      additionalData: encoder.encode(`ecom-contact:v1:${key.id}:${id}`),
+      tagLength: 128,
+    },
+    secret,
+    encoder.encode(JSON.stringify(payload)),
+  );
+  const wrapped = await crypto.subtle.encrypt(
+    { name: 'RSA-OAEP' },
+    publicKey,
+    await crypto.subtle.exportKey('raw', secret),
+  );
+  return {
+    version: 1,
+    id,
+    keyId: key.id,
+    iv: b64(iv.buffer),
+    ciphertext: b64(ciphertext),
+    wrappedKey: b64(wrapped),
+  };
+}
+export async function decryptContact(
+  envelope: MessageEnvelope,
+  keyId: string,
+  privateKey: CryptoKey,
+) {
+  if (envelope.version !== 1 || envelope.keyId !== keyId || !uuid(envelope.id))
+    throw new Error('Unlock the recovery key for this message');
+  const raw = await crypto.subtle.decrypt(
+    { name: 'RSA-OAEP' },
+    privateKey,
+    bytes(envelope.wrappedKey),
+  );
+  const secret = await crypto.subtle.importKey(
+    'raw',
+    raw,
+    { name: 'AES-GCM' },
+    false,
+    ['decrypt'],
+  );
+  const clear = await crypto.subtle.decrypt(
+    {
+      name: 'AES-GCM',
+      iv: bytes(envelope.iv),
+      additionalData: encoder.encode(`ecom-contact:v1:${keyId}:${envelope.id}`),
+      tagLength: 128,
+    },
+    secret,
+    bytes(envelope.ciphertext),
+  );
+  return contactPayload(JSON.parse(new TextDecoder().decode(clear)));
+}

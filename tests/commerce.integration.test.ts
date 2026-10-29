@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { createHmac } from 'node:crypto';
 import { PaystackGateway } from '../src/modules/payments/gateway';
 import { PaymentService } from '../src/modules/payments/service';
@@ -154,6 +155,8 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
     await db.$connect();
   }, 20000);
   beforeEach(async () => {
+    await db.supportMessage.deleteMany();
+    await db.inboxKey.deleteMany();
     await db.storeContent.deleteMany();
     await db.productImage.deleteMany();
     await db.paymentEvent.deleteMany();
@@ -560,6 +563,134 @@ suite('commerce HTTP integration with real PostgreSQL and Redis', () => {
       })
       .expect(400);
   });
+  test('encrypted inbox stores no contact plaintext, enforces roles and tracks unread status', async () => {
+    const pair = generateKeyPairSync('rsa', {
+      modulusLength: 3072,
+      publicExponent: 0x10001,
+    });
+    const jwk = {
+      ...pair.publicKey.export({ format: 'jwk' }),
+      alg: 'RSA-OAEP-256',
+      ext: true,
+      key_ops: ['encrypt'],
+    };
+    const key = { id: randomUUID(), expectedCurrentId: null, publicJwk: jwk };
+    await request(app)
+      .post('/api/v1/admin/inbox/keys')
+      .set(auth(customer))
+      .send(key)
+      .expect(403);
+    await request(app)
+      .post('/api/v1/admin/inbox/keys')
+      .set(auth(admin))
+      .send({ ...key, publicJwk: { ...jwk, d: 'private-data' } })
+      .expect(400);
+    await request(app)
+      .post('/api/v1/admin/inbox/keys')
+      .set(auth(admin))
+      .send(key)
+      .expect(201);
+    const active = await request(app).get('/api/v1/contact/key').expect(200);
+    expect(active.body.data.id).toBe(key.id);
+    expect(active.body.data.fingerprint).toHaveLength(64);
+    const envelope = {
+      version: 1,
+      id: randomUUID(),
+      keyId: key.id,
+      iv: Buffer.alloc(12, 1).toString('base64'),
+      wrappedKey: Buffer.alloc(384, 2).toString('base64'),
+      ciphertext: Buffer.alloc(100, 3).toString('base64'),
+    };
+    await request(app)
+      .post('/api/v1/contact/messages')
+      .send({
+        name: 'plaintext',
+        email: 'secret@example.com',
+        message: 'should reject',
+      })
+      .expect(400);
+    await request(app)
+      .post('/api/v1/contact/messages')
+      .send(envelope)
+      .expect(201);
+    await request(app)
+      .post('/api/v1/contact/messages')
+      .send(envelope)
+      .expect(201);
+    expect(await db.supportMessage.count()).toBe(1);
+    const stored = await db.supportMessage.findUniqueOrThrow({
+      where: { id: envelope.id },
+    });
+    expect(JSON.stringify(stored)).not.toMatch(
+      /plaintext|secret@example.com|should reject/,
+    );
+    expect(
+      (await request(app).get('/api/v1/admin/inbox/summary').set(auth(admin)))
+        .body.data.unread,
+    ).toBe(1);
+    await request(app)
+      .get(`/api/v1/admin/inbox/messages/${envelope.id}`)
+      .set(auth(customer))
+      .expect(403);
+    await request(app)
+      .get(`/api/v1/admin/inbox/messages/${envelope.id}`)
+      .expect(401);
+    await request(app)
+      .patch(`/api/v1/admin/inbox/messages/${envelope.id}`)
+      .set(auth(admin))
+      .send({ status: 'READ' })
+      .expect(200);
+    expect(
+      (await request(app).get('/api/v1/admin/inbox/summary').set(auth(admin)))
+        .body.data.unread,
+    ).toBe(0);
+    await request(app)
+      .patch(`/api/v1/admin/inbox/messages/${envelope.id}`)
+      .set(auth(admin))
+      .send({ status: 'RESOLVED' })
+      .expect(200);
+    await request(app)
+      .post('/api/v1/contact/messages')
+      .send({
+        ...envelope,
+        ciphertext: Buffer.alloc(100, 4).toString('base64'),
+      })
+      .expect(409);
+    const second = generateKeyPairSync('rsa', {
+      modulusLength: 3072,
+      publicExponent: 0x10001,
+    });
+    const newKey = {
+      id: randomUUID(),
+      expectedCurrentId: key.id,
+      publicJwk: {
+        ...second.publicKey.export({ format: 'jwk' }),
+        alg: 'RSA-OAEP-256',
+        ext: true,
+        key_ops: ['encrypt'],
+      },
+    };
+    await request(app)
+      .post('/api/v1/admin/inbox/keys')
+      .set(auth(admin))
+      .send(newKey)
+      .expect(201);
+    await request(app)
+      .post('/api/v1/contact/messages')
+      .send({ ...envelope, id: randomUUID() })
+      .expect(409);
+    expect(
+      (
+        await request(app)
+          .get(`/api/v1/admin/inbox/messages/${envelope.id}`)
+          .set(auth(admin))
+      ).body.data.envelope,
+    ).toMatchObject(envelope);
+    expect(
+      (await request(app).get('/api/v1/admin/inbox/keys').set(auth(admin))).body
+        .data,
+    ).toHaveLength(2);
+  }, 20000);
   test('liveness, dependency readiness, headers and safe errors', async () => {
     expect((await request(app).get('/health')).body.service).toBe(
       'E-com Global',

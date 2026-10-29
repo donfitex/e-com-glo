@@ -13,6 +13,8 @@ export interface Database extends Pick<
   | 'paymentEvent'
   | 'productImage'
   | 'storeContent'
+  | 'inboxKey'
+  | 'supportMessage'
   | '$queryRaw'
 > {
   $transaction<T>(

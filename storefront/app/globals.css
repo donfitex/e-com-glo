@@ -2739,3 +2739,288 @@ button {
 .content-manager .section-heading p {
   margin-top: 10px;
 }
+.contact-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  padding-block: 30px;
+  align-items: start;
+}
+.contact-intro h1 {
+  font-size: clamp(36px, 4vw, 54px);
+  line-height: 1.1;
+  letter-spacing: -2px;
+  margin-block: 16px 24px;
+}
+.contact-intro > p {
+  max-width: 440px;
+}
+.contact-assurance {
+  display: flex;
+  gap: 14px;
+  padding: 22px;
+  background: var(--soft);
+  border-radius: 10px;
+  margin-top: 28px;
+}
+.contact-assurance svg {
+  flex-shrink: 0;
+  color: var(--green);
+}
+.contact-assurance p {
+  font-size: 12px;
+}
+.contact-layout .form-card {
+  width: 100%;
+  max-width: none;
+}
+.contact-layout textarea {
+  width: 100%;
+  resize: vertical;
+}
+.contact-honeypot {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.key-fingerprint code,
+.fingerprint {
+  display: block;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  font-size: 11px;
+  background: var(--soft);
+  padding: 12px;
+  border-radius: 6px;
+}
+.key-fingerprint summary {
+  font-size: 11px;
+}
+.key-fingerprint p {
+  margin-block: 10px;
+  font-size: 11px;
+}
+.inbox-bell {
+  position: relative;
+  min-width: 32px;
+  min-height: 40px;
+}
+.inbox-bell span,
+.unread-badge {
+  background: var(--orange);
+  color: #172d29;
+  border-radius: 20px;
+  min-width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  padding-inline: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.inbox-bell span {
+  position: absolute;
+  top: 0;
+  right: -6px;
+}
+.unread-badge {
+  margin-left: 8px;
+}
+.inbox-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: calc(100% - 48px);
+  padding: 18px 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 32px #0002;
+  border-radius: 10px;
+  font-size: 12px;
+}
+.inbox-toast a {
+  color: var(--green);
+  font-weight: 600;
+}
+.admin-inbox .section-heading h2 {
+  margin-top: 0;
+}
+.admin-inbox .section-heading p {
+  margin-top: 10px;
+}
+.inbox-security {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  padding: 24px;
+  border-radius: 10px;
+  margin-bottom: 28px;
+  max-width: none;
+}
+.inbox-security > .inline-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.inbox-security form {
+  display: grid;
+  gap: 16px;
+}
+.inbox-security input {
+  width: 100%;
+}
+.inbox-security input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+}
+.inbox-security .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+}
+.inbox-security p {
+  font-size: 12px;
+}
+.inbox-security .inline-actions .text-link {
+  font-size: 11px;
+}
+.inbox-unlock {
+  grid-template-columns: 1fr 1fr;
+  align-items: end;
+  margin-block: 20px;
+}
+.inbox-unlock .button {
+  justify-self: start;
+}
+.inbox-filter {
+  max-width: 220px;
+  margin-bottom: 20px;
+}
+.inbox-filter select,
+.inbox-security select {
+  width: 100%;
+}
+.inbox-layout {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.85fr) minmax(0, 1.4fr);
+  gap: 24px;
+  align-items: start;
+}
+.inbox-list {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.inbox-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 18px;
+  text-align: left;
+  width: 100%;
+}
+.inbox-item:last-child {
+  border-bottom: 0;
+}
+.inbox-item.selected,
+.inbox-item:hover {
+  background: var(--soft);
+}
+.inbox-item > div {
+  flex: 1;
+}
+.inbox-item strong {
+  font-size: 12px;
+}
+.inbox-item small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-block: 4px 8px;
+}
+.inbox-reader {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 28px;
+  background: var(--surface);
+  min-height: 300px;
+  overflow-wrap: anywhere;
+}
+.inbox-reader h3 {
+  font-size: 23px;
+  margin-block: 10px 16px;
+}
+.inbox-reader p {
+  font-size: 12px;
+}
+.message-body {
+  white-space: pre-wrap;
+  margin-block: 24px;
+  color: var(--ink);
+  line-height: 1.9;
+}
+.inbox-reader .inline-actions {
+  flex-wrap: wrap;
+}
+.help-page {
+  max-width: 850px;
+}
+.help-page details {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+.help-page details p {
+  margin-top: 14px;
+}
+.help-page > .inline-actions {
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+@media (max-width: 800px) {
+  .contact-layout {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+  .inbox-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 520px) {
+  .admin-header-actions .account-link {
+    display: none;
+  }
+  .admin-header-actions {
+    gap: 5px;
+  }
+  .inbox-unlock {
+    grid-template-columns: 1fr;
+  }
+  .inbox-security,
+  .inbox-reader {
+    padding: 20px;
+  }
+  .admin-inbox .section-heading {
+    flex-direction: column;
+    align-items: start;
+  }
+}
+.inbox-delete {
+  margin-top: 20px;
+}
+@media (max-width: 520px) {
+  .admin-tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}

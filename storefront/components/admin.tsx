@@ -1,4 +1,7 @@
 'use client';
+import { AdminInbox } from './admin-inbox';
+import { useInboxNotifications } from './inbox-notifications';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { ContentEditor } from './content-editor';
 import { OrderFulfillment } from './order-fulfillment';
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
@@ -14,11 +17,25 @@ import {
   type Page,
   type Order,
 } from '@/lib/types';
+const adminSections = [
+  'products',
+  'categories',
+  'orders',
+  'homepage',
+  'inbox',
+] as const;
+type AdminSection = (typeof adminSections)[number];
 export function Admin() {
   const { user, loading } = useSession();
-  const [tab, setTab] = useState<
-    'products' | 'categories' | 'orders' | 'homepage'
-  >('products');
+  const params = useSearchParams();
+  const router = useRouter();
+  const { unread } = useInboxNotifications();
+  useEffect(() => {
+    const section = params.get('section');
+    if (adminSections.some((value) => value === section))
+      setTab(section as AdminSection);
+  }, [params]);
+  const [tab, setTab] = useState<AdminSection>('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -160,21 +177,25 @@ export function Admin() {
         <p>Catalog, inventory and orders, in one place.</p>
       </div>
       <nav className="admin-tabs" aria-label="Management sections">
-        {(['products', 'categories', 'orders', 'homepage'] as const).map(
-          (name) => (
-            <button
-              key={name}
-              className={tab === name ? 'selected' : ''}
-              onClick={() => {
-                setTab(name);
-                setPage(1);
-                setMessage('');
-              }}
-            >
-              {name[0]!.toUpperCase() + name.slice(1)}
-            </button>
-          ),
-        )}
+        {(
+          ['products', 'categories', 'orders', 'homepage', 'inbox'] as const
+        ).map((name) => (
+          <button
+            key={name}
+            className={tab === name ? 'selected' : ''}
+            onClick={() => {
+              setTab(name);
+              router.replace(`/admin?section=${name}`, { scroll: false });
+              setPage(1);
+              setMessage('');
+            }}
+          >
+            {name[0]!.toUpperCase() + name.slice(1)}
+            {name === 'inbox' && unread > 0 && (
+              <span className="unread-badge">{unread}</span>
+            )}
+          </button>
+        ))}
       </nav>
       {error && (
         <div className="notice error" role="alert">
@@ -192,6 +213,7 @@ export function Admin() {
         </div>
       )}
       {tab === 'homepage' && <ContentEditor />}
+      {tab === 'inbox' && <AdminInbox />}
       {tab === 'products' && (
         <div className="admin-layout">
           <div>

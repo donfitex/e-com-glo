@@ -180,3 +180,30 @@ model StoreContent {
  revision Int @default(0)
  updatedAt DateTime @updatedAt
 }
+
+model InboxKey {
+ id String @id @db.Uuid
+ publicJwk Json
+ fingerprint String @unique @db.VarChar(64)
+ active Boolean @default(true)
+ createdAt DateTime @default(now())
+ messages SupportMessage[]
+}
+enum SupportStatus {
+ NEW
+ READ
+ RESOLVED
+}
+model SupportMessage {
+ id String @id @db.Uuid
+ keyId String @db.Uuid
+ key InboxKey @relation(fields: [keyId], references: [id], onDelete: Restrict)
+ envelope Json
+ digest String @db.VarChar(64)
+ status SupportStatus @default(NEW)
+ createdAt DateTime @default(now())
+ readAt DateTime?
+ resolvedAt DateTime?
+ @@index([status,createdAt,id])
+ @@index([keyId])
+}

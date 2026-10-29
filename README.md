@@ -286,3 +286,7 @@ See [the stage mapping and measured results](docs/backend-master-plan.md) and [r
 ## Storefront content management
 
 **Admin → Homepage** manages the hero and editorial banners, category/product headings, closing section, announcement, shopping benefits, footer copy and FAQs. Each banner supports a real uploaded JPEG/PNG/WebP image through the existing durable media service. Links are limited to storefront routes; text is rendered as text rather than HTML. Publishing uses a revision check to prevent lost concurrent edits, records an audit event, and invalidates storefront route caches. Existing content is the default until an administrator publishes changes.
+
+## Encrypted contact and support inbox
+
+Customers can use **Contact us** without an account. Administrators first activate **Admin → Inbox** by creating a separate recovery passphrase, downloading the encrypted recovery file, and publishing the browser-generated public key. Messages are encrypted before transmission and decrypted only in the admin browser. The server stores no readable name, email or message body from the contact form. The inbox includes unread badges, in-app notifications, filtering, read/resolved status and deletion. No plaintext email forwarding is performed. See [encrypted-inbox.md](docs/encrypted-inbox.md) for setup, backup/rotation, cryptographic details and the browser trust boundary. Losing the recovery key/passphrase cannot be fixed by resetting the account password.

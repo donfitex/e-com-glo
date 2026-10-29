@@ -1,6 +1,7 @@
 import { siteContent } from '@/lib/server-api';
 import { SiteProvider } from '@/components/site-provider';
 import type { Metadata } from 'next';
+import { InboxNotifications } from '@/components/inbox-notifications';
 import { SessionProvider } from '@/components/session';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
@@ -34,9 +35,11 @@ export default async function RootLayout({
         </a>
         <SiteProvider value={site}>
           <SessionProvider>
-            <Header />
-            <main id="main">{children}</main>
-            <Footer />
+            <InboxNotifications>
+              <Header />
+              <main id="main">{children}</main>
+              <Footer />
+            </InboxNotifications>
           </SessionProvider>
         </SiteProvider>
       </body>

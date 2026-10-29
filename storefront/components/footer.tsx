@@ -38,6 +38,8 @@ export function Footer() {
           <Link href="/account">My account</Link>
           <Link href="/account/orders">Orders & tracking</Link>
           <Link href="/cart">Shopping bag</Link>
+          <Link href="/contact">Contact us</Link>
+          <Link href="/help">Help & FAQ</Link>
         </div>
         <div className="footer-note">
           <span className="eyebrow">

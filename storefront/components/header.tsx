@@ -13,6 +13,7 @@ import { useState } from 'react';
 import { useSession } from './session';
 import { useSiteContent } from './site-provider';
 import { siteText } from '@/lib/site-content';
+import { InboxBell } from './inbox-notifications';
 import { ThemeToggle } from './theme-toggle';
 export function Header() {
   const { user, count } = useSession();
@@ -59,7 +60,10 @@ export function Header() {
             />
             <button type="submit">Search</button>
           </form>
-          <div className="header-actions">
+          <div
+            className={`header-actions ${user?.role === 'ADMIN' ? 'admin-header-actions' : ''}`}
+          >
+            {user?.role === 'ADMIN' && <InboxBell />}
             <ThemeToggle />
             <Link className="account-link" href={user ? '/account' : '/login'}>
               <UserRound size={21} />
@@ -114,6 +118,9 @@ export function Header() {
           </Link>
           <Link href="/shop?category=sports" onClick={() => setMenu(false)}>
             Sports & outdoors
+          </Link>
+          <Link href="/contact" onClick={() => setMenu(false)}>
+            Contact us
           </Link>
           <Link href="/shop" className="nav-discover">
             Discover something new <ArrowUpRight size={14} />
